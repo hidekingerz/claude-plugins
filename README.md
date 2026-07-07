@@ -8,7 +8,10 @@ Claude Code のセッション内で:
 
 ```
 /plugin marketplace add hidekingerz/claude-plugins
-/plugin install single-agent-loop@hidekingerz
+/plugin install single-agent-loop@hidekingerz     # 必要なものだけ選んでインストール
+/plugin install graphify@hidekingerz
+/plugin install commit-push@hidekingerz
+/plugin install obsidian-handwritten-note@hidekingerz
 ```
 
 更新を取り込むとき:
@@ -54,3 +57,19 @@ Claude Code のセッション内で:
 
 テンプレートは egress 制限・MCP 検証・maker/checker 分離・長期収束を含む実ループで検証済み。
 設計の背景と検証結果は [loop-arch-evaluation の検証レポート](https://github.com/hidekingerz/loop-arch-evaluation/blob/main/docs/verification-report.md) を参照。
+
+### graphify
+
+任意のフォルダ（コード・ドキュメント・論文・画像）をナレッジグラフに変換する。
+コミュニティ検出・正直な監査証跡つきで、インタラクティブ HTML / GraphRAG 用 JSON /
+平文の GRAPH_REPORT.md の3形式を出力。トリガー: `/graphify [path]`
+
+### commit-push
+
+作業中の変更をコミットしてリモートへ push するスラッシュコマンド。
+差分・既存コミットスタイルの確認 → メッセージ生成 → commit → push まで。
+
+### obsidian-handwritten-note
+
+手帳・ノートに手書きしたメモの写真を Obsidian 用 Markdown（デイリーノート /
+アイデアノート）へ整形するスラッシュコマンド。画像を渡して「Obsidian に変換して」で発動。

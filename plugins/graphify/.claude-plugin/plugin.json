@@ -1,0 +1,7 @@
+{
+  "name": "graphify",
+  "description": "任意の入力（コード・ドキュメント・論文・画像）をナレッジグラフ化し、コミュニティ検出・監査レポートつきで HTML / JSON / Markdown に出力する",
+  "author": {
+    "name": "hidekingerz"
+  }
+}
