@@ -1,0 +1,57 @@
+# single-agent-loop 隔離実行イメージ（フロントエンド + MCP 実行時検証・Vite 系テンプレート）
+#
+# 通常の Dockerfile（node-slim）はブラウザを持たず、MCP での GUI 検証ができない。
+# これは Playwright ブラウザ入りのベースで、エージェント(claude -p)が VERIFY 段で
+# Playwright MCP / chrome-devtools MCP を使い、実画面を開いてコンソールエラー等を観測できる。
+#
+# ★ブラウザはビルド時に焼き込む（docker build は egress 制限の外を通るため実行時 DL 不要）。
+# ★Apple Silicon 対策: google-chrome-stable は linux-arm64 が無いので使わず、Playwright の
+#   Chromium（arm64/x64 両対応）を1つだけ焼き、chrome-devtools MCP もそれを共用する。
+#
+# 使い方は SKILL.md「Docker 隔離実行 → フロントエンド + MCP 検証」。Playwright バージョンは
+# プロジェクトの @playwright/test に合わせて上げ下げする。
+
+FROM mcr.microsoft.com/playwright:v1.55.0-noble
+
+# git（コンテナ内 commit に必須）。Playwright イメージに無い場合に備え導入
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI と MCP サーバをイメージに焼き込む（実行時の npm 取得を避ける）
+# ★サプライチェーン対策: 運用に乗せる際はバージョンを固定する（例: @anthropic-ai/claude-code@2.1.39）。
+#   未固定のままだとビルドのたびに最新を無検証で取り込む。
+RUN npm install -g \
+      @anthropic-ai/claude-code \
+      @playwright/mcp \
+      chrome-devtools-mcp
+
+# pnpm / yarn を使う Vite プロジェクト向け（npm だけなら不要）
+RUN corepack enable
+
+# マウントしたリポジトリを別ユーザー所有とみなして git が拒否する事故を防ぐ（全ユーザーに適用）
+RUN git config --system --add safe.directory /workspace
+
+# Playwright の Chromium への安定シンボリックリンク。両 MCP がこれを共用する
+# （chrome-devtools MCP は --executablePath、playwright MCP は --executable-path で指定。
+#   ★playwright MCP は未指定だと同梱 playwright が期待する別リビジョンを探して
+#   「Browser is not installed」で起動不能になるため、.mcp.json での指定は必須）
+RUN ln -s "$(find /ms-playwright -type f -path '*chromium-*/chrome-linux/chrome' | head -n1)" \
+      /usr/local/bin/pw-chromium
+
+# --- ここにプロジェクトのツールチェーンを追記（VERIFY_CMD が使うもの）-------------
+# 例: 追加の CLI や、起動待ち用 wait-on 等。node/npm/pnpm だけで済むなら追記不要。
+#   RUN npm install -g wait-on
+# ------------------------------------------------------------------------------------------
+
+# ブラウザのサンドボックスが有効に働く非 root ユーザーで実行（Playwright イメージ同梱の pwuser）。
+# これにより root 用の --no-sandbox 回避も、--dangerously-skip-permissions の root ガードも不要。
+# ★ただし Docker 既定の seccomp は unprivileged user namespace を塞ぐため、sandbox 有効で
+#   chromium を起動する chrome-devtools MCP は素の docker run だと "Target closed" で失敗する。
+#   対処: Playwright 公式の seccomp プロファイルを docker run / compose に渡す（動作検証済み）。
+#     --security-opt seccomp=<seccomp_profile.json>
+#     取得元: https://raw.githubusercontent.com/microsoft/playwright/main/utils/docker/seccomp_profile.json
+#   最後の手段は .mcp.json の chrome-devtools に --chrome-arg=--no-sandbox（ブラウザ隔離が弱まる）。
+#   playwright MCP は既定で chromium sandbox を使わないため、この問題の影響を受けない。
+USER pwuser
+
+WORKDIR /workspace

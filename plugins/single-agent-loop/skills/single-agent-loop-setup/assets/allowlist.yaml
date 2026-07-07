@@ -1,0 +1,23 @@
+# egress allowlist — ここに書いた宛先「だけ」がコンテナから外部到達できる（fail-closed）。
+# 先頭ドットはそのドメイン自体とサブドメイン全体を許可（例: .anthropic.com は anthropic.com と
+# api.anthropic.com 等を含む）。
+# ★重複禁止: 親ドメイン（.github.com）とその配下（codeload.github.com 等）を両方書くと
+#   squid が FATAL（"You need to remove ..."）で起動しない。親ドメインだけ書く。
+# 起動時に yq で squid 用のプレーンなリストへ変換される（docker-compose.yml の allowlist-gen）。
+# claude が接続に失敗したら
+#   docker compose -f loop/docker-compose.yml exec egress-proxy tail -20 /var/log/squid/access.log
+# で TCP_DENIED の宛先を確認し、下の allowlist に追記する。
+#
+# ★原則: allowlist は「資格情報があれば書き込める宛先」を増やすほど情報持ち出し(exfil)面が広がる。
+#   最小限に保ち、認証無しで書き込めるサービス（ペーストサービス等）は許可しない。
+#   コンテナに余計な資格情報を渡さないことが前提（渡した資格情報の到達先 = exfil 経路になる）。
+
+allowlist:
+  # Anthropic API（claude -p に必須）
+  - .anthropic.com
+  # npm レジストリ（VERIFY_CMD が npm/pnpm を使う場合。registry.npmjs.org を含む）
+  - .npmjs.org
+  # GitHub（依存取得・git 操作で必要になりがち。codeload 等サブドメインを含む）
+  - .github.com
+  - .githubusercontent.com
+  # --- プロジェクト依存の宛先をここに追記（例: files.pythonhosted.org / static.crates.io 等）---

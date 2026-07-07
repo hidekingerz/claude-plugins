@@ -1,0 +1,14 @@
+{
+  "name": "hidekingerz",
+  "owner": {
+    "name": "hidekingerz"
+  },
+  "description": "hidekingerz のチーム向け Claude Code プラグイン集",
+  "plugins": [
+    {
+      "name": "single-agent-loop",
+      "source": "./plugins/single-agent-loop",
+      "description": "自律コーディングループ（closed single-agent loop）のセットアップスキル。ハードニング済み run.sh・VISION/RULES/MEMORY 雛形・Docker 隔離・egress 制限・MCP 実行時検証を含む"
+    }
+  ]
+}

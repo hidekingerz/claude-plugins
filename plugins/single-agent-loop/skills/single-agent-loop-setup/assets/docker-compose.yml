@@ -1,0 +1,102 @@
+# single-agent-loop 隔離実行 + egress 制限（テンプレート・上級）
+#
+# loop サービスは internal ネットワーク(loopnet)にのみ属し、直接の外部到達を持たない。
+# 唯一の出口は egress-proxy(squid) の allowlist 経由だけ = fail-closed。
+# （proxy を通らない通信は届かないので、ツールが proxy 設定を無視しても「漏れ」ではなく「接続失敗」）
+#
+# ★残留物に注意: リポジトリは rw マウントのため .git/hooks・.git/config・loop/*.sh への改変は
+#   ホストに残り、後でホスト側で実行されうる。compose 経路には run-in-docker.sh のような実行後の
+#   整合性チェックが無いので、実行後にこれらの差分を確認してから git を叩くこと（SKILL.md 参照）。
+#
+# allowlist は proxy/allowlist.yaml を編集する（人間が触る唯一の元）。起動時に allowlist-gen が
+# yq で squid 用のプレーンなリスト(/gen/allowlist.conf)へ変換し、egress-proxy がそれを読む。
+#
+# 前提: このファイルと Dockerfile は loop/ 配下。使い方は SKILL.md「Docker 隔離実行 → egress 制限」。
+#
+# 実行:
+#   認証はどちらか一方（loop/.env に書くと compose が自動で読む）:
+#     ANTHROPIC_API_KEY=sk-ant-...            … API 課金（Console のキー）
+#     CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...   … Pro/Max サブスク（`claude setup-token` で発行）
+#   VERIFY_CMD="<品質ゲート>" docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
+
+services:
+  # allowlist.yaml → squid 用プレーンリストへ変換して終了する init サービス
+  allowlist-gen:
+    image: mikefarah/yq:4.53.3   # サプライチェーン対策で版固定（latest 禁止）。上げる時は明示的に
+    user: "0:0"                  # yq イメージは非 root(uid 1000)実行のため、root 所有の named volume に書けない
+    entrypoint: /bin/sh
+    command: -c "yq '.allowlist[]' /in/allowlist.yaml > /gen/allowlist.conf && echo '== generated allowlist ==' && cat /gen/allowlist.conf"
+    volumes:
+      - ./proxy/allowlist.yaml:/in/allowlist.yaml:ro
+      - allowlist-gen:/gen
+    networks:
+      - loopnet   # 外部到達不要
+
+  egress-proxy:
+    image: ubuntu/squid:6.6-24.04_beta   # サプライチェーン対策で版固定（latest 禁止）
+    restart: unless-stopped
+    depends_on:
+      allowlist-gen:
+        condition: service_completed_successfully   # 変換完了を待つ
+    volumes:
+      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+      - allowlist-gen:/gen:ro                         # 生成済みリストを読む
+    networks:
+      - egress    # インターネット到達あり
+      - loopnet   # loop からの内部到達
+
+  loop:
+    build:
+      context: .
+      # フロント + MCP 検証なら LOOP_DOCKERFILE=Dockerfile.frontend を指定
+      dockerfile: ${LOOP_DOCKERFILE:-Dockerfile}
+    depends_on:
+      - egress-proxy
+    volumes:
+      - ..:/workspace          # リポジトリルートをマウント（compose は loop/ 配下にある想定）
+    working_dir: /workspace
+    environment:
+      # 認証はどちらか一方を設定（compose では either-or を強制できないため、両方空の場合は
+      # run.sh 冒頭のガードが fail-fast する）
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      IS_SANDBOX: "1"          # root コンテナで --dangerously-skip-permissions を通すため
+      # 非必須トラフィック（テレメトリ等）を抑止し、allowlist を最小に保つ
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # すべての外向き通信を proxy へ。loopnet は internal なので proxy 以外は届かない
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      http_proxy: http://egress-proxy:3128
+      https_proxy: http://egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1
+      # loop/run.sh へ引き継ぐ設定（未設定なら run.sh の既定値）
+      # AGENT_CMD はモデル・ルーティング（反復周を安価なモデルに落とす等）に使う。
+      # 例: AGENT_CMD='claude -p --model claude-sonnet-5 --dangerously-skip-permissions -'
+      AGENT_CMD: ${AGENT_CMD:-}
+      VERIFY_CMD: ${VERIFY_CMD:-}
+      MAX_ITER: ${MAX_ITER:-8}
+      MAX_CONSEC_FAIL: ${MAX_CONSEC_FAIL:-3}
+      MAX_CONSEC_VERIFY_FAIL: ${MAX_CONSEC_VERIFY_FAIL:-5}
+      DONE_MARKER: ${DONE_MARKER:-LOOP_DONE}
+      # コンテナ内 git commit の identity
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-loop-agent}
+      GIT_COMMITTER_NAME: ${GIT_AUTHOR_NAME:-loop-agent}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-loop@example.invalid}
+      GIT_COMMITTER_EMAIL: ${GIT_AUTHOR_EMAIL:-loop@example.invalid}
+    # Docker 既定の seccomp は unprivileged userns を塞ぎ、chromium の sandbox（chrome-devtools MCP が
+    # 使う）が起動できない。Playwright 公式プロファイル（既定＋userns 許可）で解消する。
+    # Dockerfile.frontend を使わない（ブラウザ無しの）ループでは無くても害はない。
+    security_opt:
+      - seccomp:./chromium-seccomp.json
+    networks:
+      - loopnet   # internal のみ → 直接の外部到達は不可
+    command: ./loop/run.sh
+
+networks:
+  egress:
+    driver: bridge
+  loopnet:
+    internal: true   # ★これが肝: 外部ルーティングを持たない内部専用ネットワーク
+
+volumes:
+  allowlist-gen:     # allowlist-gen → egress-proxy 間で生成済みリストを受け渡す
