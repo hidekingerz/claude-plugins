@@ -200,23 +200,26 @@ git switch -c feat/<topic>
    ```bash
    export ANTHROPIC_API_KEY=sk-ant-...   # または CLAUDE_CODE_OAUTH_TOKEN（Pro/Max。`claude setup-token`）
    LOOP_DOCKERFILE=Dockerfile.frontend \
-     LOOP_DOCKER_FLAGS='-v /workspace/node_modules --security-opt seccomp=loop/chromium-seccomp.json' \
      VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
      ./loop/run-in-docker.sh
-   # egress 制限も併用するなら（node_modules 隔離は docker-compose.yml に組み込み済み・下記④）:
+   # egress 制限（compose 経路）も併用するなら、frontend の node_modules 隔離は
+   # docker-compose.yml の `- /workspace/node_modules` 行のコメントを外して有効化する（下記④）:
    # LOOP_DOCKERFILE=Dockerfile.frontend \
    #   VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
    #   docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
    ```
 
-   - `LOOP_DOCKER_FLAGS` の `-v /workspace/node_modules` は **node_modules をコンテナ専用の匿名
-     ボリュームに隔離**する（★重要）。これが無いと、bind mount した host の node_modules（macOS/arm64
-     の native バイナリ）を Linux コンテナが使って壊れる。匿名ボリュームは `Dockerfile.frontend` で
-     pwuser 所有に初期化済み（これが無いと root 所有で作られ `npm ci` が EACCES で失敗する）。
-     - 匿名ボリュームは `docker run --rm` で**毎回破棄**されるため、上のガードは実行のたびに `npm ci` を
+   - **frontend では node_modules を隔離する**（★重要）: bind mount した host の node_modules（macOS/arm64
+     の native バイナリ）を Linux コンテナが使うと壊れる。`run-in-docker.sh` は `LOOP_DOCKERFILE=Dockerfile.frontend`
+     のとき `-v /workspace/node_modules`（＋ seccomp）を**自動付与**するので手渡し不要。compose 経路では
+     `docker-compose.yml` の該当行のコメントを外す。匿名ボリュームは `Dockerfile.frontend` で pwuser 所有に
+     初期化済み（root 所有だと `npm ci` が EACCES）。既定 Dockerfile（ブラウザ無し）は隔離せず host の
+     node_modules をそのまま使う（pure-JS を壊さないため）。
+     - この匿名ボリュームは `docker run --rm` で**毎回破棄**されるため、ガードは実行のたびに `npm ci` を
        レジストリから走らせる。**egress 制限時は registry を allowlist に含めること**（同梱
        `allowlist.yaml` は既定で npm を許可済み）。再 install コストを避けたいなら匿名ボリュームを
-       **named ボリューム**（例 `-v loop-nm-<repo>:/workspace/node_modules`）に替えて run 間で永続させる。
+       **named ボリューム**（例 `LOOP_DOCKER_FLAGS='-v loop-nm-<repo>:/workspace/node_modules'`）に替えて
+       run 間で永続させる（自動付与の匿名ボリュームより優先される）。
    - インストールは **`npm install` でなく `npm ci`**（lockfile を書き換えず churn を出さない。
      `references/gate-design.md`「5.」）。ガード `[ node_modules/.package-lock.json -nt package-lock.json ]`
      は **lockfile が変わった時だけ再 install** する（毎周スキップだと、ループが依存を追加した周に

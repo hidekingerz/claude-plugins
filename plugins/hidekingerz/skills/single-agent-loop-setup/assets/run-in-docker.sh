@@ -51,6 +51,24 @@ if [[ ! -f "loop/$DOCKERFILE" ]]; then
   exit 1
 fi
 
+# Dockerfile.frontend（ブラウザ/MCP 検証）に必須のフラグを自動付与する（ユーザーに手渡しさせない＝
+# compose 経路との非対称・付け忘れを防ぐ）。既に LOOP_DOCKER_FLAGS で指定済みなら重複させない:
+#   ・-v /workspace/node_modules … host（macOS/arm64）の node_modules を隔離（native バイナリ衝突回避）。
+#     ★これは frontend の時だけ。既定 Dockerfile では隔離しない（pure-JS の bind mount を壊さないため）。
+#   ・--security-opt seccomp=loop/chromium-seccomp.json … Docker 既定 seccomp が unprivileged userns を
+#     塞ぎ chromium sandbox が起動できないのを解消（chrome-devtools MCP 用）。
+LOOP_DOCKER_FLAGS="${LOOP_DOCKER_FLAGS:-}"
+if [[ "$DOCKERFILE" == "Dockerfile.frontend" ]]; then
+  [[ "$LOOP_DOCKER_FLAGS" == *"/workspace/node_modules"* ]] || LOOP_DOCKER_FLAGS="$LOOP_DOCKER_FLAGS -v /workspace/node_modules"
+  if [[ "$LOOP_DOCKER_FLAGS" != *"seccomp="* ]]; then
+    if [[ -f loop/chromium-seccomp.json ]]; then
+      LOOP_DOCKER_FLAGS="$LOOP_DOCKER_FLAGS --security-opt seccomp=loop/chromium-seccomp.json"
+    else
+      echo "WARNING: loop/chromium-seccomp.json が無いため seccomp プロファイルを付与できません（chrome-devtools MCP の sandbox が起動しない可能性）。assets/chromium-seccomp.json を loop/ に配置してください。" >&2
+    fi
+  fi
+fi
+
 # コンテナ内 git commit 用の identity（ホストの設定を引き継ぐ）
 GIT_NAME="$(git config user.name 2>/dev/null || echo loop-agent)"
 GIT_EMAIL="$(git config user.email 2>/dev/null || echo loop@example.invalid)"
@@ -74,10 +92,11 @@ pre_snapshot="$(integrity_snapshot)"
 echo "== build image: $IMAGE (dockerfile: $DOCKERFILE) =="
 docker build -t "$IMAGE" -f "loop/$DOCKERFILE" loop/
 
-# TTY があるときだけ -t（CI 等 TTY 無し環境でも動くように）
+# 注: docker run は下で**背景実行 + wait**する（シグナル即応のため）。背景プロセスに `-t`
+# （pty 割当）を付けると、フォアグラウンドでない TTY 制御で端末が壊れる/出力が乱れることがあるため、
+# ここでは -t を付けない。ログはそのまま stdout に流れる。
 # 注: 空配列は ${arr[@]+...} で展開する（macOS 標準の bash 3.2 は set -u + 空配列展開でエラー）
 tty_flag=()
-[[ -t 1 ]] && tty_flag=(-t)
 
 # ホスト常駐バックエンドへの経路は必要な実行でだけ開ける（HOST_BACKEND=1）
 host_flag=()
@@ -99,7 +118,15 @@ cleanup_container() { docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true; }
 # 終了を待つ間シグナルの trap を遅延させるため、ラッパーだけに SIGTERM が来てもコンテナが止まらない
 # （孤立コンテナが回り続ける）。そこで docker run を背景実行し `wait` で待つ: `wait` はシグナルで
 # 即中断されるので、trap が直ちに走ってコンテナを停止できる。
-on_signal() { echo >&2; echo "== signal received — stopping container $CONTAINER_NAME ==" >&2; cleanup_container; }
+docker_pid=""
+on_signal() {
+  echo >&2; echo "== signal received — stopping container $CONTAINER_NAME ==" >&2
+  # まだコンテナ生成前にシグナルが来たケース: docker CLI 自体を止めて生成を防ぐ。
+  [[ -n "$docker_pid" ]] && kill "$docker_pid" 2>/dev/null || true
+  cleanup_container
+  # CLI が停止直前にコンテナを作り始めた取りこぼしに備え、一度だけリトライ（残存レースの縮小）。
+  sleep 1; cleanup_container
+}
 trap on_signal INT TERM
 trap cleanup_container EXIT
 
