@@ -95,7 +95,13 @@ fi
 #       `docker stop single-agent-loop-run-<pid>` を手動実行するか、`docker ps` で拾って止める。
 CONTAINER_NAME="single-agent-loop-run-$$"
 cleanup_container() { docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true; }
-trap cleanup_container EXIT INT TERM
+# INT/TERM を受けたら即コンテナを停止する。★docker run を前景で実行すると、bash はその子プロセスの
+# 終了を待つ間シグナルの trap を遅延させるため、ラッパーだけに SIGTERM が来てもコンテナが止まらない
+# （孤立コンテナが回り続ける）。そこで docker run を背景実行し `wait` で待つ: `wait` はシグナルで
+# 即中断されるので、trap が直ちに走ってコンテナを停止できる。
+on_signal() { echo >&2; echo "== signal received — stopping container $CONTAINER_NAME ==" >&2; cleanup_container; }
+trap on_signal INT TERM
+trap cleanup_container EXIT
 
 echo "== run loop in container (name=$CONTAINER_NAME, network=${LOOP_NETWORK:-bridge}) =="
 rc=0
@@ -118,7 +124,10 @@ docker run --rm --name "$CONTAINER_NAME" ${tty_flag[@]+"${tty_flag[@]}"} \
   -e GIT_AUTHOR_EMAIL="$GIT_EMAIL" -e GIT_COMMITTER_EMAIL="$GIT_EMAIL" \
   ${LOOP_DOCKER_FLAGS:-} \
   "$IMAGE" \
-  ./loop/run.sh || rc=$?
+  ./loop/run.sh &
+docker_pid=$!
+# wait はシグナル受信で即座に戻る（trap 実行後）。シグナル無しなら docker run の終了コードを得る。
+wait "$docker_pid" || rc=$?
 
 # --- 実行後の整合性チェック（失敗時も必ず実施） ---------------------------------------------
 post_snapshot="$(integrity_snapshot)"

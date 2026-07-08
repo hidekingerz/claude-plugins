@@ -95,18 +95,23 @@ LOOP_PROMPT は **1タスク=1コミット・amend 禁止・ハッシュを MEMO
 
 ### 実走で追加で学んだ落とし穴（配管）
 
-- **マーカーの "うっかり単独行出力"**: 行アンカー検出は堅牢だが、エージェントが「まだ未完了」と本文で
-  書きつつ、別行にマーカーだけを出力して**誤完了停止**した実例がある。DoD 未達なのに停止するので
-  被害は大きい。対策は検出側ではなく指示側: `LOOP_PROMPT.md` に「未完了のうちはマーカーを独立行で
-  出さない／言及時は同じ行に他の語を続ける」を明記し、`DONE_MARKER` をプロジェクト固有名に寄せる。
-- **VERIFY のインストールは `npm install` でなく `npm ci`**: host と container の npm バージョン差で、
-  `npm install` は `package-lock.json` を毎周わずかに書き換える（例: npm 11 が書く `libc` フィールドを
-  npm 10 が剥がす）。作業ツリーが汚れて 1タスク=1コミットに混入しかねない。`npm ci` は lockfile を
-  書き換えず node_modules をクリーンに再構築するので churn ゼロ。インストールガードは
-  `[ -x node_modules/.bin/<tool> ] || npm ci; <lint/typecheck/test>` の形が安定。
-- **孤立コンテナ**: `run-in-docker.sh` のラッパーが殺されても（Ctrl-C・実行時間上限）、コンテナは
-  detach したまま監視外で回り続けうる。同梱 `run-in-docker.sh` は `--name` 付与＋ `trap docker stop`
-  で INT/TERM・正常終了時に停止する（SIGKILL は trap 不能なので、その場合は名前で `docker stop`）。
+> 詳細な手順・実装は各ファイルが正典。ここでは「なぜ」だけを残し重複を避ける。
+
+- **マーカーの "うっかり単独行出力"**（正典: `LOOP_PROMPT.md` の停止条件）: エージェントが「まだ未完了」と
+  書きつつ別行にマーカーだけ出力して**誤完了停止**した実例がある。DoD 未達で止まるので被害は大きい。
+  対策は検出側でなく指示側（未完了時は独立行で出さない・言及は同じ行に他語を続ける）＋ `DONE_MARKER`
+  をプロジェクト固有名に。名にメタ文字が入っても壊れないよう `run.sh` はマーカーを正規表現エスケープ済み。
+- **VERIFY のインストールは `npm install` でなく `npm ci`**（正典: `SKILL.md` のフロント節）: host/container の
+  npm バージョン差で `npm install` は `package-lock.json` を毎周わずかに書き換え（例: `libc` フィールド）、
+  作業ツリーが汚れ 1タスク=1コミットに混入しうる。`npm ci` は lockfile を書き換えずクリーン再構築＝churn
+  ゼロ。ガードは `[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; <lint/typecheck/test>`
+  ＝**lockfile が変わった周だけ再 install**（`-x <tool>` 存在チェックだと依存追加周に install 漏れ）。
+  ★`npm ci` は **package-lock.json が commit 済みである前提**。lockfile が無い/古いリポでは毎周 abort して
+  ループが無進捗になるので、その場合は `npm install` に置き換える。
+- **孤立コンテナ**（正典: `run-in-docker.sh`）: ラッパーが殺されても（Ctrl-C・実行時間上限）コンテナが
+  detach したまま監視外で回り続けうる。`run-in-docker.sh` は `--name` ＋ docker を**背景実行して `wait`**
+  し、INT/TERM の trap を遅延させずに `docker stop` する（前景実行だと trap が子の終了まで遅延して止まらない）。
+  SIGKILL は trap 不能なので、その場合のみ名前で手動 `docker stop`。
 
 ## 6. session/API 制限とコスト
 

@@ -213,6 +213,10 @@ git switch -c feat/<topic>
      ボリュームに隔離**する（★重要）。これが無いと、bind mount した host の node_modules（macOS/arm64
      の native バイナリ）を Linux コンテナが使って壊れる。匿名ボリュームは `Dockerfile.frontend` で
      pwuser 所有に初期化済み（これが無いと root 所有で作られ `npm ci` が EACCES で失敗する）。
+     - 匿名ボリュームは `docker run --rm` で**毎回破棄**されるため、上のガードは実行のたびに `npm ci` を
+       レジストリから走らせる。**egress 制限時は registry を allowlist に含めること**（同梱
+       `allowlist.yaml` は既定で npm を許可済み）。再 install コストを避けたいなら匿名ボリュームを
+       **named ボリューム**（例 `-v loop-nm-<repo>:/workspace/node_modules`）に替えて run 間で永続させる。
    - インストールは **`npm install` でなく `npm ci`**（lockfile を書き換えず churn を出さない。
      `references/gate-design.md`「5.」）。ガード `[ node_modules/.package-lock.json -nt package-lock.json ]`
      は **lockfile が変わった時だけ再 install** する（毎周スキップだと、ループが依存を追加した周に
