@@ -107,10 +107,17 @@ for ((i = 1; i <= MAX_ITER; i++)); do
     consecutive_verify_fail=0
   fi
 
-  # 停止サイン検出: 行全体がマーカーと一致する場合のみ（説明文中の言及で誤検出しないよう厳格化）。
-  # 各行の前後空白を除去し、マーカーと**文字列完全一致**で判定する（grep -F=固定文字列・-x=行全体・
-  # -q=静音）。正規表現を使わないので、DONE_MARKER に . ( ) < > 等どんな文字が入っても安全。
-  if printf '%s\n' "$output" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -qxF -- "$DONE_MARKER"; then
+  # 停止サイン検出: 行全体がマーカーと文字列完全一致する場合のみ停止（説明文中の言及で誤検出しない）。
+  # ★パイプ + pipefail は使わない: `grep -q` の早期終了で上流(sed)が SIGPIPE(141)で死ぬと、pipefail が
+  #   真の一致でも非0を返し、一致を取り落とす。そこでパイプを使わず bash 内で各行を trim して比較する
+  #   （正規表現も使わないので DONE_MARKER に . ( ) < > 等どんな文字が入っても安全）。
+  done_detected=0
+  while IFS= read -r _line; do
+    _trimmed="${_line#"${_line%%[![:space:]]*}"}"          # 先頭空白を除去
+    _trimmed="${_trimmed%"${_trimmed##*[![:space:]]}"}"    # 末尾空白を除去
+    if [[ "$_trimmed" == "$DONE_MARKER" ]]; then done_detected=1; break; fi
+  done <<< "$output"
+  if [[ "$done_detected" -eq 1 ]]; then
     echo
     echo "== $DONE_MARKER detected on iteration $i. Loop complete. =="
     exit 0

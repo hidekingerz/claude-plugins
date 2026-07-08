@@ -94,9 +94,7 @@ docker build -t "$IMAGE" -f "loop/$DOCKERFILE" loop/
 
 # 注: docker run は下で**背景実行 + wait**する（シグナル即応のため）。背景プロセスに `-t`
 # （pty 割当）を付けると、フォアグラウンドでない TTY 制御で端末が壊れる/出力が乱れることがあるため、
-# ここでは -t を付けない。ログはそのまま stdout に流れる。
-# 注: 空配列は ${arr[@]+...} で展開する（macOS 標準の bash 3.2 は set -u + 空配列展開でエラー）
-tty_flag=()
+# pty は割り当てない（ログはそのまま stdout に流れる）。
 
 # ホスト常駐バックエンドへの経路は必要な実行でだけ開ける（HOST_BACKEND=1）
 host_flag=()
@@ -133,7 +131,7 @@ trap cleanup_container EXIT
 echo "== run loop in container (name=$CONTAINER_NAME, network=${LOOP_NETWORK:-bridge}) =="
 rc=0
 # shellcheck disable=SC2086
-docker run --rm --name "$CONTAINER_NAME" ${tty_flag[@]+"${tty_flag[@]}"} \
+docker run --rm --name "$CONTAINER_NAME" \
   --network "${LOOP_NETWORK:-bridge}" \
   ${host_flag[@]+"${host_flag[@]}"} \
   -v "$REPO_ROOT":/workspace \

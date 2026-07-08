@@ -200,12 +200,12 @@ git switch -c feat/<topic>
    ```bash
    export ANTHROPIC_API_KEY=sk-ant-...   # または CLAUDE_CODE_OAUTH_TOKEN（Pro/Max。`claude setup-token`）
    LOOP_DOCKERFILE=Dockerfile.frontend \
-     VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
+     VERIFY_CMD='{ [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run lint && npm run typecheck && npm test' \
      ./loop/run-in-docker.sh
    # egress 制限（compose 経路）も併用するなら、frontend の node_modules 隔離は
    # docker-compose.yml の `- /workspace/node_modules` 行のコメントを外して有効化する（下記④）:
    # LOOP_DOCKERFILE=Dockerfile.frontend \
-   #   VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
+   #   VERIFY_CMD='{ [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run lint && npm run typecheck && npm test' \
    #   docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
    ```
 
