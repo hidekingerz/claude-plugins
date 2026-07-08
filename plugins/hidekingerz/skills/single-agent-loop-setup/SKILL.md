@@ -184,8 +184,9 @@ git switch -c feat/<topic>
 1. ブラウザ入りイメージと MCP 設定を配置:
 
    ```bash
-   cp "${CLAUDE_SKILL_DIR}/assets/Dockerfile.frontend"  loop/Dockerfile.frontend
-   cp "${CLAUDE_SKILL_DIR}/assets/mcp.json"             .mcp.json   # ★リポジトリルート（claude -p が読む）
+   cp "${CLAUDE_SKILL_DIR}/assets/Dockerfile.frontend"    loop/Dockerfile.frontend
+   cp "${CLAUDE_SKILL_DIR}/assets/chromium-seccomp.json"  loop/chromium-seccomp.json   # 下の run-in-docker.sh コマンドの --security-opt seccomp= が参照
+   cp "${CLAUDE_SKILL_DIR}/assets/mcp.json"               .mcp.json   # ★リポジトリルート（claude -p が読む）
    ```
 
 2. `Dockerfile.frontend` の印の箇所に Vite のツールチェーン（pnpm 等）を必要なら追記。Playwright
@@ -200,10 +201,11 @@ git switch -c feat/<topic>
    export ANTHROPIC_API_KEY=sk-ant-...   # または CLAUDE_CODE_OAUTH_TOKEN（Pro/Max。`claude setup-token`）
    LOOP_DOCKERFILE=Dockerfile.frontend \
      LOOP_DOCKER_FLAGS='-v /workspace/node_modules --security-opt seccomp=loop/chromium-seccomp.json' \
-     VERIFY_CMD='[ -x node_modules/.bin/vite ] || npm ci; npm run lint && npm run typecheck && npm test' \
+     VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
      ./loop/run-in-docker.sh
-   # egress 制限も併用するなら:
-   # LOOP_DOCKERFILE=Dockerfile.frontend VERIFY_CMD="..." \
+   # egress 制限も併用するなら（node_modules 隔離は docker-compose.yml に組み込み済み・下記④）:
+   # LOOP_DOCKERFILE=Dockerfile.frontend \
+   #   VERIFY_CMD='[ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; npm run lint && npm run typecheck && npm test' \
    #   docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
    ```
 
@@ -212,7 +214,10 @@ git switch -c feat/<topic>
      の native バイナリ）を Linux コンテナが使って壊れる。匿名ボリュームは `Dockerfile.frontend` で
      pwuser 所有に初期化済み（これが無いと root 所有で作られ `npm ci` が EACCES で失敗する）。
    - インストールは **`npm install` でなく `npm ci`**（lockfile を書き換えず churn を出さない。
-     `references/gate-design.md`「5.」）。`vite` の部分は使うツールに合わせる（`biome` 等）。
+     `references/gate-design.md`「5.」）。ガード `[ node_modules/.package-lock.json -nt package-lock.json ]`
+     は **lockfile が変わった時だけ再 install** する（毎周スキップだと、ループが依存を追加した周に
+     install 漏れ → 壊れたまま緑になる）。`npm ci` は **package-lock.json が commit 済み**である前提
+     （無いリポでは `npm install` に置き換える）。
    - `--security-opt seccomp=loop/chromium-seccomp.json` は chrome-devtools MCP を sandbox 有効で
      動かすため（Playwright MCP 主なら無くても可）。
    - 認証: `claude setup-token` は**素のトークンでなく説明文込みで出力**されるので

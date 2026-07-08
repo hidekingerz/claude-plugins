@@ -34,6 +34,10 @@ VERIFY_CMD="${VERIFY_CMD:-}"
 MAX_CONSEC_FAIL="${MAX_CONSEC_FAIL:-3}"
 MAX_CONSEC_VERIFY_FAIL="${MAX_CONSEC_VERIFY_FAIL:-5}"
 
+# DONE_MARKER を grep -E で「行全体一致」させる際、プロジェクト固有名に . ( ) 等の正規表現メタ文字が
+# 含まれても誤検出・誤動作しないよう、ERE メタ文字をエスケープした版を作る。
+DONE_MARKER_RE="$(printf '%s' "$DONE_MARKER" | sed 's/[^[:alnum:]_]/\\&/g')"
+
 # リポジトリルートへ移動（このスクリプトは loop/ 配下にある想定）
 cd "$(dirname "$0")/.."
 
@@ -108,7 +112,7 @@ for ((i = 1; i <= MAX_ITER; i++)); do
   fi
 
   # 停止サイン検出: 行全体がマーカーと一致する場合のみ（説明文中の言及で誤検出しないよう厳格化）。
-  if grep -qE "^[[:space:]]*${DONE_MARKER}[[:space:]]*$" <<< "$output"; then
+  if grep -qE "^[[:space:]]*${DONE_MARKER_RE}[[:space:]]*$" <<< "$output"; then
     echo
     echo "== $DONE_MARKER detected on iteration $i. Loop complete. =="
     exit 0
