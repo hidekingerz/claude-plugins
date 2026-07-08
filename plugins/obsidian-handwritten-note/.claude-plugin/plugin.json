@@ -1,7 +1,0 @@
-{
-  "name": "obsidian-handwritten-note",
-  "description": "手帳・ノートの手書きメモ写真を Obsidian 用 Markdown（デイリーノート/アイデアノート）に変換するスラッシュコマンド",
-  "author": {
-    "name": "hidekingerz"
-  }
-}

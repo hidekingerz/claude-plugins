@@ -1,7 +1,0 @@
-{
-  "name": "dev-agents",
-  "description": "開発補助サブエージェント集: tech-doc-writer（技術ドキュメント作成）と test-writer（ユニット/インテグレーションテスト作成）",
-  "author": {
-    "name": "hidekingerz"
-  }
-}

@@ -1,7 +1,0 @@
-{
-  "name": "commit-push",
-  "description": "変更をコミットしてリモートに push するスラッシュコマンド。差分確認→既存スタイルに合わせたメッセージ生成→commit→push まで",
-  "author": {
-    "name": "hidekingerz"
-  }
-}

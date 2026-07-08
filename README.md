@@ -1,6 +1,8 @@
 # claude-plugins
 
 claude 用スキル置き場（Claude Code plugin marketplace）。
+全スキル・エージェントを単一プラグイン `hidekingerz` に束ねている（vercel プラグインと同じ方式）。
+スキルは `hidekingerz:<スキル名>` の名前で利用できる。
 
 ## 導入方法
 
@@ -8,10 +10,7 @@ Claude Code のセッション内で:
 
 ```
 /plugin marketplace add hidekingerz/claude-plugins
-/plugin install single-agent-loop@hidekingerz     # 必要なものだけ選んでインストール
-/plugin install graphify@hidekingerz
-/plugin install commit-push@hidekingerz
-/plugin install obsidian-handwritten-note@hidekingerz
+/plugin install hidekingerz@hidekingerz
 ```
 
 更新を取り込むとき:
@@ -36,14 +35,16 @@ Claude Code のセッション内で:
     }
   },
   "enabledPlugins": {
-    "single-agent-loop@hidekingerz": true
+    "hidekingerz@hidekingerz": true
   }
 }
 ```
 
-## 収録プラグイン
+## 収録内容
 
-### single-agent-loop
+### スキル
+
+#### hidekingerz:single-agent-loop-setup
 
 自律コーディングループ（closed single-agent loop）を任意のリポジトリにセットアップするスキル。
 
@@ -58,25 +59,23 @@ Claude Code のセッション内で:
 テンプレートは egress 制限・MCP 検証・maker/checker 分離・長期収束を含む実ループで検証済み。
 設計の背景と検証結果は [loop-arch-evaluation の検証レポート](https://github.com/hidekingerz/loop-arch-evaluation/blob/main/docs/verification-report.md) を参照。
 
-### graphify
+#### hidekingerz:graphify
 
 任意のフォルダ（コード・ドキュメント・論文・画像）をナレッジグラフに変換する。
 コミュニティ検出・正直な監査証跡つきで、インタラクティブ HTML / GraphRAG 用 JSON /
 平文の GRAPH_REPORT.md の3形式を出力。トリガー: `/graphify [path]`
 
-### commit-push
+#### hidekingerz:commit-push
 
 作業中の変更をコミットしてリモートへ push するスラッシュコマンド。
 差分・既存コミットスタイルの確認 → メッセージ生成 → commit → push まで。
 
-### obsidian-handwritten-note
+#### hidekingerz:obsidian-handwritten-note
 
 手帳・ノートに手書きしたメモの写真を Obsidian 用 Markdown（デイリーノート /
 アイデアノート）へ整形するスラッシュコマンド。画像を渡して「Obsidian に変換して」で発動。
 
-### dev-agents
-
-開発補助のサブエージェント集（スキルではなくエージェント定義）:
+### サブエージェント
 
 - **tech-doc-writer** — README・API ドキュメント・アーキテクチャ文書・セットアップガイド等の
   技術文書を作成する。「README が欲しい」「この API をドキュメント化して」で自動委任される

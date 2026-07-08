@@ -1,7 +1,0 @@
-{
-  "name": "single-agent-loop",
-  "description": "自律コーディングループ（closed single-agent loop）を任意のリポジトリにセットアップするスキル。VERIFY ゲート設計・Docker 隔離実行（egress 制限/seccomp 対応）・MCP による実行時検証・maker/checker 分離までを実証済みテンプレートで支援する",
-  "author": {
-    "name": "hidekingerz"
-  }
-}

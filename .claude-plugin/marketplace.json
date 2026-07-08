@@ -6,29 +6,9 @@
   "description": "hidekingerz のチーム向け Claude Code プラグイン集",
   "plugins": [
     {
-      "name": "single-agent-loop",
-      "source": "./plugins/single-agent-loop",
-      "description": "自律コーディングループ（closed single-agent loop）のセットアップスキル。ハードニング済み run.sh・VISION/RULES/MEMORY 雛形・Docker 隔離・egress 制限・MCP 実行時検証を含む"
-    },
-    {
-      "name": "graphify",
-      "source": "./plugins/graphify",
-      "description": "任意の入力（コード・ドキュメント・論文・画像）をナレッジグラフ化。コミュニティ検出・監査レポートつきで HTML / JSON / Markdown を出力"
-    },
-    {
-      "name": "commit-push",
-      "source": "./plugins/commit-push",
-      "description": "変更をコミットしてリモートに push するスラッシュコマンド"
-    },
-    {
-      "name": "obsidian-handwritten-note",
-      "source": "./plugins/obsidian-handwritten-note",
-      "description": "手帳・ノートの手書きメモ写真を Obsidian 用 Markdown に変換するスラッシュコマンド"
-    },
-    {
-      "name": "dev-agents",
-      "source": "./plugins/dev-agents",
-      "description": "開発補助サブエージェント集（tech-doc-writer / test-writer）"
+      "name": "hidekingerz",
+      "source": "./plugins/hidekingerz",
+      "description": "スキル・エージェント集: single-agent-loop-setup（自律コーディングループのセットアップ）/ graphify（ナレッジグラフ化）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント"
     }
   ]
 }
