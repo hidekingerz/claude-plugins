@@ -24,6 +24,11 @@
       "name": "obsidian-handwritten-note",
       "source": "./plugins/obsidian-handwritten-note",
       "description": "手帳・ノートの手書きメモ写真を Obsidian 用 Markdown に変換するスラッシュコマンド"
+    },
+    {
+      "name": "dev-agents",
+      "source": "./plugins/dev-agents",
+      "description": "開発補助サブエージェント集（tech-doc-writer / test-writer）"
     }
   ]
 }
