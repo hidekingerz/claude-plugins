@@ -198,11 +198,30 @@ git switch -c feat/<topic>
 
    ```bash
    export ANTHROPIC_API_KEY=sk-ant-...   # または CLAUDE_CODE_OAUTH_TOKEN（Pro/Max。`claude setup-token`）
-   LOOP_DOCKERFILE=Dockerfile.frontend VERIFY_CMD="<品質ゲート>" ./loop/run-in-docker.sh
+   LOOP_DOCKERFILE=Dockerfile.frontend \
+     LOOP_DOCKER_FLAGS='-v /workspace/node_modules --security-opt seccomp=loop/chromium-seccomp.json' \
+     VERIFY_CMD='[ -x node_modules/.bin/vite ] || npm ci; npm run lint && npm run typecheck && npm test' \
+     ./loop/run-in-docker.sh
    # egress 制限も併用するなら:
    # LOOP_DOCKERFILE=Dockerfile.frontend VERIFY_CMD="..." \
    #   docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
    ```
+
+   - `LOOP_DOCKER_FLAGS` の `-v /workspace/node_modules` は **node_modules をコンテナ専用の匿名
+     ボリュームに隔離**する（★重要）。これが無いと、bind mount した host の node_modules（macOS/arm64
+     の native バイナリ）を Linux コンテナが使って壊れる。匿名ボリュームは `Dockerfile.frontend` で
+     pwuser 所有に初期化済み（これが無いと root 所有で作られ `npm ci` が EACCES で失敗する）。
+   - インストールは **`npm install` でなく `npm ci`**（lockfile を書き換えず churn を出さない。
+     `references/gate-design.md`「5.」）。`vite` の部分は使うツールに合わせる（`biome` 等）。
+   - `--security-opt seccomp=loop/chromium-seccomp.json` は chrome-devtools MCP を sandbox 有効で
+     動かすため（Playwright MCP 主なら無くても可）。
+   - 認証: `claude setup-token` は**素のトークンでなく説明文込みで出力**されるので
+     `export X=$(claude setup-token)` では丸ごと入って失敗する。**実行してトークン部分だけコピー**して
+     `export CLAUDE_CODE_OAUTH_TOKEN=<paste>` すること。無人で回す場合は gitignore した `loop/.env`
+     （`CLAUDE_CODE_OAUTH_TOKEN=...`）に置き、`set -a; . loop/.env; set +a` で読ませると扱いやすい。
+   - **配信URLを変える設定（Vite の `base` 等）を常時入れると、ループの MCP 検証（`localhost:PORT/` を
+     開く）が 404 で壊れる**。GitHub Pages のサブパス等はデプロイビルド限定に gate する
+     （例: `base: process.env.VITE_BASE ?? "/"` にして deploy 時だけ `VITE_BASE` を渡す）。
 
 要点と落とし穴:
 - **ブラウザはイメージに焼き込み済み**（Playwright の Chromium。arm64/x64 両対応）。実行時にブラウザを

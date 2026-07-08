@@ -93,6 +93,21 @@ GUI の「動く/操作できる」「体感速度」「位置がカーソルに
 LOOP_PROMPT は **1タスク=1コミット・amend 禁止・ハッシュを MEMORY に書かない**を指示
 （コミットノイズ防止）。
 
+### 実走で追加で学んだ落とし穴（配管）
+
+- **マーカーの "うっかり単独行出力"**: 行アンカー検出は堅牢だが、エージェントが「まだ未完了」と本文で
+  書きつつ、別行にマーカーだけを出力して**誤完了停止**した実例がある。DoD 未達なのに停止するので
+  被害は大きい。対策は検出側ではなく指示側: `LOOP_PROMPT.md` に「未完了のうちはマーカーを独立行で
+  出さない／言及時は同じ行に他の語を続ける」を明記し、`DONE_MARKER` をプロジェクト固有名に寄せる。
+- **VERIFY のインストールは `npm install` でなく `npm ci`**: host と container の npm バージョン差で、
+  `npm install` は `package-lock.json` を毎周わずかに書き換える（例: npm 11 が書く `libc` フィールドを
+  npm 10 が剥がす）。作業ツリーが汚れて 1タスク=1コミットに混入しかねない。`npm ci` は lockfile を
+  書き換えず node_modules をクリーンに再構築するので churn ゼロ。インストールガードは
+  `[ -x node_modules/.bin/<tool> ] || npm ci; <lint/typecheck/test>` の形が安定。
+- **孤立コンテナ**: `run-in-docker.sh` のラッパーが殺されても（Ctrl-C・実行時間上限）、コンテナは
+  detach したまま監視外で回り続けうる。同梱 `run-in-docker.sh` は `--name` 付与＋ `trap docker stop`
+  で INT/TERM・正常終了時に停止する（SIGKILL は trap 不能なので、その場合は名前で `docker stop`）。
+
 ## 6. session/API 制限とコスト
 
 ループは「メインの監視セッション + 毎周の `claude -p`（各々フルエージェント）」が**同じ契約の枠**を

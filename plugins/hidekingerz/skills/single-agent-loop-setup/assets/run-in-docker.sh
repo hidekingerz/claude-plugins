@@ -86,10 +86,21 @@ if [[ "${HOST_BACKEND:-0}" == "1" ]]; then
   echo "NOTE: HOST_BACKEND=1 — コンテナから host.docker.internal でホストへ到達できます（E2E 用）。"
 fi
 
-echo "== run loop in container (network=${LOOP_NETWORK:-bridge}) =="
+# コンテナに名前を付け、ラッパー（この docker run）が停止したら確実にコンテナも止める。
+# 背景: ラッパーが SIGINT/SIGTERM やハーネスの実行時間上限で殺されても、コンテナは detach した
+#       まま iteration を回し続け、監視外で commit を継続してしまうことがある（特に Docker
+#       Desktop）。名前を付けておけば `docker ps`/`docker stop` で確実に特定・停止でき、下の
+#       trap で INT/TERM・正常終了時には自動停止する。
+# 注意: SIGKILL(kill -9) は trap できないため自動停止しない。その場合は下記の名前で
+#       `docker stop single-agent-loop-run-<pid>` を手動実行するか、`docker ps` で拾って止める。
+CONTAINER_NAME="single-agent-loop-run-$$"
+cleanup_container() { docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true; }
+trap cleanup_container EXIT INT TERM
+
+echo "== run loop in container (name=$CONTAINER_NAME, network=${LOOP_NETWORK:-bridge}) =="
 rc=0
 # shellcheck disable=SC2086
-docker run --rm ${tty_flag[@]+"${tty_flag[@]}"} \
+docker run --rm --name "$CONTAINER_NAME" ${tty_flag[@]+"${tty_flag[@]}"} \
   --network "${LOOP_NETWORK:-bridge}" \
   ${host_flag[@]+"${host_flag[@]}"} \
   -v "$REPO_ROOT":/workspace \
