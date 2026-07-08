@@ -43,6 +43,14 @@ RUN ln -s "$(find /ms-playwright -type f -path '*chromium-*/chrome-linux/chrome'
 #   RUN npm install -g wait-on
 # ------------------------------------------------------------------------------------------
 
+# node_modules を匿名ボリューム（-v /workspace/node_modules）で隔離する運用に対応する。
+# 匿名ボリュームは「イメージ内の同パスの所有権」を引き継いで初期化されるため、ここで
+# pwuser 所有の空ディレクトリを作っておく。これが無いとボリュームが root 所有で作られ、
+# 非 root の pwuser から `npm install`/`npm ci` が EACCES で失敗し、初周の VERIFY が丸ごと潰れる。
+# （host(darwin/arm64) の node_modules を Linux コンテナが bind mount 経由で使うと native
+#  バイナリが壊れるため、node_modules は匿名ボリュームで隠すのが定石。詳細は SKILL.md）。
+RUN mkdir -p /workspace/node_modules && chown -R pwuser:pwuser /workspace/node_modules
+
 # ブラウザのサンドボックスが有効に働く非 root ユーザーで実行（Playwright イメージ同梱の pwuser）。
 # これにより root 用の --no-sandbox 回避も、--dangerously-skip-permissions の root ガードも不要。
 # ★ただし Docker 既定の seccomp は unprivileged user namespace を塞ぐため、sandbox 有効で

@@ -51,6 +51,24 @@ if [[ ! -f "loop/$DOCKERFILE" ]]; then
   exit 1
 fi
 
+# Dockerfile.frontend（ブラウザ/MCP 検証）に必須のフラグを自動付与する（ユーザーに手渡しさせない＝
+# compose 経路との非対称・付け忘れを防ぐ）。既に LOOP_DOCKER_FLAGS で指定済みなら重複させない:
+#   ・-v /workspace/node_modules … host（macOS/arm64）の node_modules を隔離（native バイナリ衝突回避）。
+#     ★これは frontend の時だけ。既定 Dockerfile では隔離しない（pure-JS の bind mount を壊さないため）。
+#   ・--security-opt seccomp=loop/chromium-seccomp.json … Docker 既定 seccomp が unprivileged userns を
+#     塞ぎ chromium sandbox が起動できないのを解消（chrome-devtools MCP 用）。
+LOOP_DOCKER_FLAGS="${LOOP_DOCKER_FLAGS:-}"
+if [[ "$DOCKERFILE" == "Dockerfile.frontend" ]]; then
+  [[ "$LOOP_DOCKER_FLAGS" == *"/workspace/node_modules"* ]] || LOOP_DOCKER_FLAGS="$LOOP_DOCKER_FLAGS -v /workspace/node_modules"
+  if [[ "$LOOP_DOCKER_FLAGS" != *"seccomp="* ]]; then
+    if [[ -f loop/chromium-seccomp.json ]]; then
+      LOOP_DOCKER_FLAGS="$LOOP_DOCKER_FLAGS --security-opt seccomp=loop/chromium-seccomp.json"
+    else
+      echo "WARNING: loop/chromium-seccomp.json が無いため seccomp プロファイルを付与できません（chrome-devtools MCP の sandbox が起動しない可能性）。assets/chromium-seccomp.json を loop/ に配置してください。" >&2
+    fi
+  fi
+fi
+
 # コンテナ内 git commit 用の identity（ホストの設定を引き継ぐ）
 GIT_NAME="$(git config user.name 2>/dev/null || echo loop-agent)"
 GIT_EMAIL="$(git config user.email 2>/dev/null || echo loop@example.invalid)"
@@ -74,10 +92,9 @@ pre_snapshot="$(integrity_snapshot)"
 echo "== build image: $IMAGE (dockerfile: $DOCKERFILE) =="
 docker build -t "$IMAGE" -f "loop/$DOCKERFILE" loop/
 
-# TTY があるときだけ -t（CI 等 TTY 無し環境でも動くように）
-# 注: 空配列は ${arr[@]+...} で展開する（macOS 標準の bash 3.2 は set -u + 空配列展開でエラー）
-tty_flag=()
-[[ -t 1 ]] && tty_flag=(-t)
+# 注: docker run は下で**背景実行 + wait**する（シグナル即応のため）。背景プロセスに `-t`
+# （pty 割当）を付けると、フォアグラウンドでない TTY 制御で端末が壊れる/出力が乱れることがあるため、
+# pty は割り当てない（ログはそのまま stdout に流れる）。
 
 # ホスト常駐バックエンドへの経路は必要な実行でだけ開ける（HOST_BACKEND=1）
 host_flag=()
@@ -86,10 +103,35 @@ if [[ "${HOST_BACKEND:-0}" == "1" ]]; then
   echo "NOTE: HOST_BACKEND=1 — コンテナから host.docker.internal でホストへ到達できます（E2E 用）。"
 fi
 
-echo "== run loop in container (network=${LOOP_NETWORK:-bridge}) =="
+# コンテナに名前を付け、ラッパー（この docker run）が停止したら確実にコンテナも止める。
+# 背景: ラッパーが SIGINT/SIGTERM やハーネスの実行時間上限で殺されても、コンテナは detach した
+#       まま iteration を回し続け、監視外で commit を継続してしまうことがある（特に Docker
+#       Desktop）。名前を付けておけば `docker ps`/`docker stop` で確実に特定・停止でき、下の
+#       trap で INT/TERM・正常終了時には自動停止する。
+# 注意: SIGKILL(kill -9) は trap できないため自動停止しない。その場合は下記の名前で
+#       `docker stop single-agent-loop-run-<pid>` を手動実行するか、`docker ps` で拾って止める。
+CONTAINER_NAME="single-agent-loop-run-$$"
+cleanup_container() { docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true; }
+# INT/TERM を受けたら即コンテナを停止する。★docker run を前景で実行すると、bash はその子プロセスの
+# 終了を待つ間シグナルの trap を遅延させるため、ラッパーだけに SIGTERM が来てもコンテナが止まらない
+# （孤立コンテナが回り続ける）。そこで docker run を背景実行し `wait` で待つ: `wait` はシグナルで
+# 即中断されるので、trap が直ちに走ってコンテナを停止できる。
+docker_pid=""
+on_signal() {
+  echo >&2; echo "== signal received — stopping container $CONTAINER_NAME ==" >&2
+  # まだコンテナ生成前にシグナルが来たケース: docker CLI 自体を止めて生成を防ぐ。
+  [[ -n "$docker_pid" ]] && kill "$docker_pid" 2>/dev/null || true
+  cleanup_container
+  # CLI が停止直前にコンテナを作り始めた取りこぼしに備え、一度だけリトライ（残存レースの縮小）。
+  sleep 1; cleanup_container
+}
+trap on_signal INT TERM
+trap cleanup_container EXIT
+
+echo "== run loop in container (name=$CONTAINER_NAME, network=${LOOP_NETWORK:-bridge}) =="
 rc=0
 # shellcheck disable=SC2086
-docker run --rm ${tty_flag[@]+"${tty_flag[@]}"} \
+docker run --rm --name "$CONTAINER_NAME" \
   --network "${LOOP_NETWORK:-bridge}" \
   ${host_flag[@]+"${host_flag[@]}"} \
   -v "$REPO_ROOT":/workspace \
@@ -107,7 +149,10 @@ docker run --rm ${tty_flag[@]+"${tty_flag[@]}"} \
   -e GIT_AUTHOR_EMAIL="$GIT_EMAIL" -e GIT_COMMITTER_EMAIL="$GIT_EMAIL" \
   ${LOOP_DOCKER_FLAGS:-} \
   "$IMAGE" \
-  ./loop/run.sh || rc=$?
+  ./loop/run.sh &
+docker_pid=$!
+# wait はシグナル受信で即座に戻る（trap 実行後）。シグナル無しなら docker run の終了コードを得る。
+wait "$docker_pid" || rc=$?
 
 # --- 実行後の整合性チェック（失敗時も必ず実施） ---------------------------------------------
 post_snapshot="$(integrity_snapshot)"

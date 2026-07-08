@@ -93,6 +93,27 @@ GUI の「動く/操作できる」「体感速度」「位置がカーソルに
 LOOP_PROMPT は **1タスク=1コミット・amend 禁止・ハッシュを MEMORY に書かない**を指示
 （コミットノイズ防止）。
 
+### 実走で追加で学んだ落とし穴（配管）
+
+> 詳細な手順・実装は各ファイルが正典。ここでは「なぜ」だけを残し重複を避ける。
+
+- **マーカーの "うっかり単独行出力"**（正典: `LOOP_PROMPT.md` の停止条件）: エージェントが「まだ未完了」と
+  書きつつ別行にマーカーだけ出力して**誤完了停止**した実例がある。DoD 未達で止まるので被害は大きい。
+  対策は検出側でなく指示側（未完了時は独立行で出さない・言及は同じ行に他語を続ける）＋ `DONE_MARKER`
+  をプロジェクト固有名に。名にメタ文字（`.` `()` `<>` 等）が入っても壊れないよう `run.sh` は**文字列完全一致**（正規表現不使用）で判定する。
+- **VERIFY のインストールは `npm install` でなく `npm ci`**（正典: `SKILL.md` のフロント節）: host/container の
+  npm バージョン差で `npm install` は `package-lock.json` を毎周わずかに書き換え（例: `libc` フィールド）、
+  作業ツリーが汚れ 1タスク=1コミットに混入しうる。`npm ci` は lockfile を書き換えずクリーン再構築＝churn
+  ゼロ。ガードは `{ [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && <lint/typecheck/test>`
+  ＝**lockfile が変わった周だけ再 install**（`-x <tool>` 存在チェックだと依存追加周に install 漏れ）。
+  ★`;` でなく `&&` でつなぐこと: `npm ci` の失敗を VERIFY の exit に伝播させないと「壊れたまま緑」になる。
+  ★`npm ci` は **package-lock.json が commit 済みである前提**。lockfile が無い/古いリポでは毎周 abort して
+  ループが無進捗になるので、その場合は `npm install` に置き換える。
+- **孤立コンテナ**（正典: `run-in-docker.sh`）: ラッパーが殺されても（Ctrl-C・実行時間上限）コンテナが
+  detach したまま監視外で回り続けうる。`run-in-docker.sh` は `--name` ＋ docker を**背景実行して `wait`**
+  し、INT/TERM の trap を遅延させずに `docker stop` する（前景実行だと trap が子の終了まで遅延して止まらない）。
+  SIGKILL は trap 不能なので、その場合のみ名前で手動 `docker stop`。
+
 ## 6. session/API 制限とコスト
 
 ループは「メインの監視セッション + 毎周の `claude -p`（各々フルエージェント）」が**同じ契約の枠**を

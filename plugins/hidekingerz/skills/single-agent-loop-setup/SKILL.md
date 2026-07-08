@@ -184,8 +184,9 @@ git switch -c feat/<topic>
 1. ブラウザ入りイメージと MCP 設定を配置:
 
    ```bash
-   cp "${CLAUDE_SKILL_DIR}/assets/Dockerfile.frontend"  loop/Dockerfile.frontend
-   cp "${CLAUDE_SKILL_DIR}/assets/mcp.json"             .mcp.json   # ★リポジトリルート（claude -p が読む）
+   cp "${CLAUDE_SKILL_DIR}/assets/Dockerfile.frontend"    loop/Dockerfile.frontend
+   cp "${CLAUDE_SKILL_DIR}/assets/chromium-seccomp.json"  loop/chromium-seccomp.json   # 下の run-in-docker.sh コマンドの --security-opt seccomp= が参照
+   cp "${CLAUDE_SKILL_DIR}/assets/mcp.json"               .mcp.json   # ★リポジトリルート（claude -p が読む）
    ```
 
 2. `Dockerfile.frontend` の印の箇所に Vite のツールチェーン（pnpm 等）を必要なら追記。Playwright
@@ -198,11 +199,41 @@ git switch -c feat/<topic>
 
    ```bash
    export ANTHROPIC_API_KEY=sk-ant-...   # または CLAUDE_CODE_OAUTH_TOKEN（Pro/Max。`claude setup-token`）
-   LOOP_DOCKERFILE=Dockerfile.frontend VERIFY_CMD="<品質ゲート>" ./loop/run-in-docker.sh
-   # egress 制限も併用するなら:
-   # LOOP_DOCKERFILE=Dockerfile.frontend VERIFY_CMD="..." \
+   LOOP_DOCKERFILE=Dockerfile.frontend \
+     VERIFY_CMD='{ [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run lint && npm run typecheck && npm test' \
+     ./loop/run-in-docker.sh
+   # egress 制限（compose 経路）も併用するなら、frontend の node_modules 隔離は
+   # docker-compose.yml の `- /workspace/node_modules` 行のコメントを外して有効化する（下記④）:
+   # LOOP_DOCKERFILE=Dockerfile.frontend \
+   #   VERIFY_CMD='{ [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run lint && npm run typecheck && npm test' \
    #   docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
    ```
+
+   - **frontend では node_modules を隔離する**（★重要）: bind mount した host の node_modules（macOS/arm64
+     の native バイナリ）を Linux コンテナが使うと壊れる。`run-in-docker.sh` は `LOOP_DOCKERFILE=Dockerfile.frontend`
+     のとき `-v /workspace/node_modules`（＋ seccomp）を**自動付与**するので手渡し不要。compose 経路では
+     `docker-compose.yml` の該当行のコメントを外す。匿名ボリュームは `Dockerfile.frontend` で pwuser 所有に
+     初期化済み（root 所有だと `npm ci` が EACCES）。既定 Dockerfile（ブラウザ無し）は隔離せず host の
+     node_modules をそのまま使う（pure-JS を壊さないため）。
+     - この匿名ボリュームは `docker run --rm` で**毎回破棄**されるため、ガードは実行のたびに `npm ci` を
+       レジストリから走らせる。**egress 制限時は registry を allowlist に含めること**（同梱
+       `allowlist.yaml` は既定で npm を許可済み）。再 install コストを避けたいなら匿名ボリュームを
+       **named ボリューム**（例 `LOOP_DOCKER_FLAGS='-v loop-nm-<repo>:/workspace/node_modules'`）に替えて
+       run 間で永続させる（自動付与の匿名ボリュームより優先される）。
+   - インストールは **`npm install` でなく `npm ci`**（lockfile を書き換えず churn を出さない。
+     `references/gate-design.md`「5.」）。ガード `[ node_modules/.package-lock.json -nt package-lock.json ]`
+     は **lockfile が変わった時だけ再 install** する（毎周スキップだと、ループが依存を追加した周に
+     install 漏れ → 壊れたまま緑になる）。`npm ci` は **package-lock.json が commit 済み**である前提
+     （無いリポでは `npm install` に置き換える）。
+   - `--security-opt seccomp=loop/chromium-seccomp.json` は chrome-devtools MCP を sandbox 有効で
+     動かすため（Playwright MCP 主なら無くても可）。
+   - 認証: `claude setup-token` は**素のトークンでなく説明文込みで出力**されるので
+     `export X=$(claude setup-token)` では丸ごと入って失敗する。**実行してトークン部分だけコピー**して
+     `export CLAUDE_CODE_OAUTH_TOKEN=<paste>` すること。無人で回す場合は gitignore した `loop/.env`
+     （`CLAUDE_CODE_OAUTH_TOKEN=...`）に置き、`set -a; . loop/.env; set +a` で読ませると扱いやすい。
+   - **配信URLを変える設定（Vite の `base` 等）を常時入れると、ループの MCP 検証（`localhost:PORT/` を
+     開く）が 404 で壊れる**。GitHub Pages のサブパス等はデプロイビルド限定に gate する
+     （例: `base: process.env.VITE_BASE ?? "/"` にして deploy 時だけ `VITE_BASE` を渡す）。
 
 要点と落とし穴:
 - **ブラウザはイメージに焼き込み済み**（Playwright の Chromium。arm64/x64 両対応）。実行時にブラウザを

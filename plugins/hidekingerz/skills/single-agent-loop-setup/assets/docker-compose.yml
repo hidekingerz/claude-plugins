@@ -54,6 +54,12 @@ services:
       - egress-proxy
     volumes:
       - ..:/workspace          # リポジトリルートをマウント（compose は loop/ 配下にある想定）
+      # ★node_modules 隔離は「常時」入れない: 空の匿名ボリュームで host の node_modules を隠すと、
+      #   依存がインストール済みだった pure-JS プロジェクトの VERIFY（例 `npm test`）が壊れる。
+      #   host が macOS/arm64 で native バイナリを含む依存を使う場合・Dockerfile.frontend を使う場合
+      #   **だけ**、次行のコメントを外して隔離する（合わせて VERIFY にインストールガードを付けること。
+      #   SKILL.md「フロントエンド + MCP」節参照）:
+      # - /workspace/node_modules
     working_dir: /workspace
     environment:
       # 認証はどちらか一方を設定（compose では either-or を強制できないため、両方空の場合は
