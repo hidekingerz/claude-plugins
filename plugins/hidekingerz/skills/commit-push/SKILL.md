@@ -31,11 +31,11 @@ argument-hint: "[コミットメッセージ]"
 - 引数が指定されている場合はそれを使う
 - 指定がない場合は差分から適切なメッセージを生成する
 - リポジトリのコミット履歴のスタイルに合わせる
-- 末尾に必ず以下の Co-Authored-By を付与する（モデル名は実際に使用しているモデルに合わせる）：
-  ```
-  Co-Authored-By: Claude <モデル名> <noreply@anthropic.com>
-  ```
-  例: `Claude Sonnet 4.6`, `Claude Opus 4.6`, `Claude Haiku 4.5` など
+- 末尾に必ず、実際に使用しているエージェント・モデルに合わせた Co-Authored-By を付与する：
+  - Claude Code: `Co-Authored-By: Claude <モデル名> <noreply@anthropic.com>`
+    （例: `Claude Sonnet 4.6`, `Claude Opus 4.8` など）
+  - Codex: `Co-Authored-By: Codex <noreply@openai.com>`
+  - opencode: `Co-Authored-By: opencode <noreply@opencode.ai>`
 
 ### 3. ユーザーにコミット内容を確認する
 
@@ -68,7 +68,7 @@ HEREDOC を使ってメッセージを渡す：
 git commit -m "$(cat <<'EOF'
 <コミットメッセージ>
 
-Co-Authored-By: Claude <モデル名> <noreply@anthropic.com>
+<ステップ2で決めた Co-Authored-By 行>
 EOF
 )"
 ```

@@ -35,11 +35,13 @@ Turn any folder of files into a navigable knowledge graph with community detecti
 /graphify explain "SwinTransformer"                   # plain-language explanation of a node
 ```
 
+(Invocation prefix varies by harness: Claude Code `/graphify`, Codex `$graphify`, opencode invokes this skill by name. The argument conventions above are the same everywhere.)
+
 ## What graphify is for
 
 graphify is built around Andrej Karpathy's /raw folder workflow: drop anything into a folder - papers, tweets, screenshots, code, notes - and get a structured knowledge graph that shows you what you didn't know was connected.
 
-Three things it does that Claude alone cannot:
+Three things it does that the agent alone cannot:
 1. **Persistent graph** - relationships are stored in `graphify-out/graph.json` and survive across sessions. Ask questions weeks later without re-reading everything.
 2. **Honest audit trail** - every edge is tagged EXTRACTED, INFERRED, or AMBIGUOUS. You know what was found vs invented.
 3. **Cross-document surprise** - community detection finds connections between concepts in different files that you would never think to ask about directly.
@@ -143,7 +145,7 @@ else:
 
 **Fast path:** If detection found zero docs, papers, and images (code-only corpus), skip Part B entirely and go straight to Part C. AST handles code - there is nothing for semantic subagents to do.
 
-**MANDATORY: You MUST use the Agent tool here. Reading files yourself one-by-one is forbidden - it is 5-10x slower. If you do not use the Agent tool you are doing this wrong.**
+**MANDATORY: If your harness has a subagent tool (Claude Code: `Agent`, opencode: `task`), you MUST use it here. Reading files yourself one-by-one is forbidden when subagents are available - it is 5-10x slower. Only if your harness has no subagent capability (e.g. Codex CLI): process the chunks yourself sequentially - read each chunk's files and produce the exact same JSON output per chunk as specified below.**
 
 Before dispatching subagents, print a timing estimate:
 - Load `total_words` and file counts from `.graphify_detect.json`
@@ -181,15 +183,17 @@ Load files from `.graphify_uncached.txt`. Split into chunks of 20-25 files each.
 
 **Step B2 - Dispatch ALL subagents in a single message**
 
-Call the Agent tool multiple times IN THE SAME RESPONSE - one call per chunk. This is the only way they run in parallel. If you make one Agent call, wait, then make another, you are doing it sequentially and defeating the purpose.
+Call the subagent tool multiple times IN THE SAME RESPONSE - one call per chunk. This is the only way they run in parallel. If you make one subagent call, wait, then make another, you are doing it sequentially and defeating the purpose.
 
 Concrete example for 3 chunks:
 ```
-[Agent tool call 1: files 1-15]
-[Agent tool call 2: files 16-30]  
-[Agent tool call 3: files 31-45]
+[subagent tool call 1: files 1-15]
+[subagent tool call 2: files 16-30]
+[subagent tool call 3: files 31-45]
 ```
 All three in one message. Not three separate messages.
+
+(No-subagent fallback, e.g. Codex CLI: work through the chunks yourself one at a time. For each chunk, read the files and produce the same JSON described below, then continue to Step B3 as if each chunk were a subagent result.)
 
 Each subagent receives this exact prompt (substitute FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, and DEEP_MODE):
 
@@ -574,7 +578,7 @@ print('graph.graphml written - open in Gephi, yEd, or any GraphML tool')
 python3 -m graphify.serve graphify-out/graph.json
 ```
 
-This starts a stdio MCP server that exposes tools: `query_graph`, `get_node`, `get_neighbors`, `get_community`, `god_nodes`, `graph_stats`, `shortest_path`. Add to Claude Desktop or any MCP-compatible agent orchestrator so other agents can query the graph live.
+This starts a stdio MCP server that exposes tools: `query_graph`, `get_node`, `get_neighbors`, `get_community`, `god_nodes`, `graph_stats`, `shortest_path`. Add to Claude Desktop, Codex (`~/.codex/config.toml` の `mcp_servers`), opencode (`opencode.json` の `mcp`), or any MCP-compatible agent orchestrator so other agents can query the graph live.
 
 To configure in Claude Desktop, add to `claude_desktop_config.json`:
 ```json
@@ -1152,7 +1156,7 @@ Supported URL types (auto-detected):
 - Twitter/X → fetched via oEmbed, saved as `.md` with tweet text and author
 - arXiv → abstract + metadata saved as `.md`  
 - PDF → downloaded as `.pdf`
-- Images (.png/.jpg/.webp) → downloaded, Claude vision extracts on next run
+- Images (.png/.jpg/.webp) → downloaded, vision extracts on next run
 - Any webpage → converted to markdown via html2text
 
 ---
@@ -1207,6 +1211,8 @@ This writes a `## graphify` section to the local `CLAUDE.md` that instructs Clau
 ```bash
 graphify claude uninstall  # remove the section
 ```
+
+(Codex / opencode users: the equivalent always-on file is `AGENTS.md`. Run `graphify claude install`, then copy the generated `## graphify` section from `CLAUDE.md` into `AGENTS.md` - or just symlink `CLAUDE.md` to `AGENTS.md` if the project has no other Claude-specific content.)
 
 ---
 

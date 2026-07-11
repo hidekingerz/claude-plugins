@@ -4,6 +4,9 @@ claude 用スキル置き場（Claude Code plugin marketplace）。
 全スキル・エージェントを単一プラグイン `hidekingerz` に束ねている（vercel プラグインと同じ方式）。
 スキルは `hidekingerz:<スキル名>` の名前で利用できる。
 
+スキルは [Agent Skills 標準](https://agentskills.io)（SKILL.md）に沿ったツール中立な書き方に
+してあるため、**Codex CLI / opencode でもそのまま使える**（下記「Codex / opencode で使う」参照）。
+
 ## 導入方法
 
 Claude Code のセッション内で:
@@ -39,6 +42,44 @@ Claude Code のセッション内で:
   }
 }
 ```
+
+## Codex / opencode で使う
+
+Codex CLI と opencode はどちらも Agent Skills 標準（SKILL.md）をサポートしており、
+共通のユーザースキルディレクトリ **`~/.agents/skills/`** を読み込む。
+リポジトリを clone して `install.sh` を実行するだけでよい:
+
+```bash
+git clone https://github.com/hidekingerz/claude-plugins.git
+cd claude-plugins
+./install.sh
+```
+
+インストールされるもの:
+
+- **`~/.agents/skills/`**（Codex / opencode 共通）
+  - 4スキル: `single-agent-loop-setup` / `graphify` / `commit-push` / `obsidian-handwritten-note`
+  - サブエージェントのスキル版: `tech-doc-writer` / `test-writer`（`portable/skills/` から）
+- **`~/.config/opencode/agents/`**（opencode のみ。`--skills-only` でスキップ可）
+  - `tech-doc-writer` / `test-writer` サブエージェント（`@tech-doc-writer` のように起動）
+
+使い方:
+
+- **Codex**: `$commit-push` のように `$スキル名` で明示起動。依頼内容が description に
+  一致すれば自動発動もする。プロジェクト単位で使いたい場合はリポジトリの `.agents/skills/` に
+  スキルディレクトリをコピーしてもよい
+- **opencode**: 依頼内容に応じて `skill` ツール経由で自動発動する
+
+更新は `git pull` してから `./install.sh` を再実行。削除は `./install.sh --uninstall`。
+
+補足:
+
+- Claude Code 固有の frontmatter（`disable-model-invocation` 等）は Codex / opencode では
+  無視される。このため `commit-push` / `obsidian-handwritten-note` は Codex / opencode では
+  自動発動もしうる（どちらも実行前にユーザー確認を挟む設計なので実害はない）
+- `single-agent-loop-setup` の Docker 隔離テンプレートは Claude Code CLI（`claude -p`）を
+  ループ内エージェントとして焼き込む前提。Codex / opencode でループ自体を回す場合の
+  `AGENT_CMD` 差し替え手順は同スキルの「ループを Claude 以外のエージェント CLI で回す」節を参照
 
 ## 収録内容
 
