@@ -18,6 +18,10 @@
 #     ANTHROPIC_API_KEY=sk-ant-...            … API 課金（Console のキー）
 #     CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...   … Pro/Max サブスク（`claude setup-token` で発行）
 #   VERIFY_CMD="<品質ゲート>" docker compose -f loop/docker-compose.yml up --build --abort-on-container-exit
+#
+#   Claude 以外のエージェント CLI で回す場合（SKILL.md「ループを Claude 以外のエージェント CLI で回す」参照）:
+#     LOOP_AGENT_PKG=@openai/codex（Codex）/ opencode-ai（opencode）+ AGENT_CMD の差し替え
+#     + 認証 env（OPENAI_API_KEY 等）+ proxy/allowlist.yaml の該当宛先のコメント解除
 
 services:
   # allowlist.yaml → squid 用プレーンリストへ変換して終了する init サービス
@@ -50,6 +54,9 @@ services:
       context: .
       # フロント + MCP 検証なら LOOP_DOCKERFILE=Dockerfile.frontend を指定
       dockerfile: ${LOOP_DOCKERFILE:-Dockerfile}
+      args:
+        # イメージに焼き込むエージェント CLI（Codex: @openai/codex / opencode: opencode-ai）
+        LOOP_AGENT_PKG: ${LOOP_AGENT_PKG:-@anthropic-ai/claude-code}
     depends_on:
       - egress-proxy
     volumes:
@@ -62,10 +69,13 @@ services:
       # - /workspace/node_modules
     working_dir: /workspace
     environment:
-      # 認証はどちらか一方を設定（compose では either-or を強制できないため、両方空の場合は
-      # run.sh 冒頭のガードが fail-fast する）
+      # 認証はループ内エージェントが必要とするものだけを設定（claude はどちらか一方。
+      # 未設定の組み合わせは run.sh 冒頭のガードが fail-fast する）
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Codex（または opencode で OpenAI モデル）を使う場合のみ設定。使わないループに渡さない
+      # （allowlist の原則: コンテナ内の資格情報の到達先 = exfil 経路になる）
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       IS_SANDBOX: "1"          # root コンテナで --dangerously-skip-permissions を通すため
       # 非必須トラフィック（テレメトリ等）を抑止し、allowlist を最小に保つ
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"

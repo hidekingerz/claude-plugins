@@ -158,14 +158,24 @@ git switch -c feat/<topic>
 
 注意点:
 
-- `run.sh` の認証 fail-fast チェックは `AGENT_CMD` が claude のときだけ働く。他 CLI では
-  認証切れで MAX_CONSEC_FAIL まで空回りしうるので、実行前に1回手で叩いて認証を確認する。
-- 下記「Docker 隔離実行」のテンプレートは **Claude Code CLI をイメージに焼き込む前提**
-  （`Dockerfile` の `npm install -g @anthropic-ai/claude-code`）。他 CLI で回すなら
-  Codex は `@openai/codex`、opencode は `opencode-ai` に差し替え、`allowlist.yaml` の
-  Anthropic API 宛先を各社 API エンドポイント（例: `api.openai.com`）に置き換える。
-  `run-in-docker.sh` / `docker-compose.yml` の認証チェック・環境変数（`ANTHROPIC_API_KEY` 等）も
-  同様に読み替える。
+- `run.sh` の認証 fail-fast チェックが判定できるのは claude（`ANTHROPIC_API_KEY` /
+  `CLAUDE_CODE_OAUTH_TOKEN`）と codex（`OPENAI_API_KEY` / `~/.codex/auth.json`）のみ。
+  opencode 等それ以外の CLI は認証切れで MAX_CONSEC_FAIL まで空回りしうるので、
+  実行前に1回手で叩いて認証を確認する。
+- 下記「Docker 隔離実行」のテンプレートは、焼き込むエージェント CLI を **`LOOP_AGENT_PKG`** で
+  選べる（既定: `@anthropic-ai/claude-code`。`run-in-docker.sh` / compose 両経路で対応）:
+
+  ```bash
+  # 例: Codex で隔離ループを回す
+  LOOP_AGENT_PKG=@openai/codex \
+    AGENT_CMD='codex exec --dangerously-bypass-approvals-and-sandbox -' \
+    OPENAI_API_KEY=sk-... \
+    VERIFY_CMD="<品質ゲート>" ./loop/run-in-docker.sh
+  ```
+
+  opencode は `LOOP_AGENT_PKG=opencode-ai` + 上記 stdin ラッパー（リポジトリ内に作るので
+  コンテナでもそのまま動く）+ 使うプロバイダの API キー。egress 制限（compose）併用時は
+  `allowlist.yaml` の OpenAI / models.dev 行のコメントを外す（ファイル内に記載済み）。
 - 「フロントエンド + MCP 実行時検証」節の `.mcp.json` / `.claude/settings.json` の
   `enableAllProjectMcpServers` は Claude Code 固有。Codex は `~/.codex/config.toml` の
   `mcp_servers`、opencode は `opencode.json` の `mcp` で同等の MCP サーバを定義する。

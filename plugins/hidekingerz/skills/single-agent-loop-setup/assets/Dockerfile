@@ -14,9 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Claude Code CLI（claude -p を無人実行するため）
+# ループ内エージェント CLI をイメージに焼き込む（既定: Claude Code）。
+# Codex なら LOOP_AGENT_PKG=@openai/codex、opencode なら LOOP_AGENT_PKG=opencode-ai を指定する
+# （run-in-docker.sh / docker-compose.yml は環境変数 LOOP_AGENT_PKG をこの build-arg に渡す。
+#   AGENT_CMD の差し替えも忘れずに。SKILL.md「ループを Claude 以外のエージェント CLI で回す」参照）。
 # ★サプライチェーン対策: 運用に乗せる際はバージョンを固定する（例: @anthropic-ai/claude-code@2.1.39）
-RUN npm install -g @anthropic-ai/claude-code
+ARG LOOP_AGENT_PKG=@anthropic-ai/claude-code
+RUN npm install -g "$LOOP_AGENT_PKG"
 
 # マウントしたリポジトリを別ユーザー所有とみなして git が拒否する事故を防ぐ
 RUN git config --global --add safe.directory /workspace

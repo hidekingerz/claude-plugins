@@ -14,6 +14,9 @@
 #   AGENT_CMD       エージェント1回実行コマンド。プロンプトを stdin で受け、標準出力に返す。
 #                   既定: `claude -p --dangerously-skip-permissions -`
 #                   （無人ループのため権限確認をバイパス。feature ブランチ + RULES + VERIFY が安全網）
+#                   Claude 以外の例（SKILL.md「ループを Claude 以外のエージェント CLI で回す」参照）:
+#                     Codex:    AGENT_CMD='codex exec --dangerously-bypass-approvals-and-sandbox -'
+#                     opencode: stdin を渡すラッパー経由（AGENT_CMD='./loop/agent-opencode.sh'）
 #   PROMPT_FILE     ループ用プロンプト（既定: loop/LOOP_PROMPT.md）
 #   MAX_ITER        最大反復回数（トークン暴走防止。既定: 8。長丁場は再実行前提）
 #   DONE_MARKER     停止サイン（既定: LOOP_DONE）
@@ -64,12 +67,22 @@ if [[ -z "$VERIFY_CMD" ]]; then
   echo "WARNING: VERIFY_CMD が空です。品質ゲート無しではループが壊れた変更を緑として進めます。" >&2
 fi
 
-# 既定エージェント（claude）は無人実行のため認証が必須。空回りする前に fail-fast する。
-# （ANTHROPIC_API_KEY = API 課金 / CLAUDE_CODE_OAUTH_TOKEN = Pro/Max サブスクの `claude setup-token`）
-if [[ "$AGENT_CMD" == claude* && -z "${ANTHROPIC_API_KEY:-}" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-  echo "ERROR: ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN のどちらも未設定です。無人の claude -p は認証できません。" >&2
-  exit 2
-fi
+# 無人実行のため認証が必須。空回りする前に fail-fast する（判定できるのは claude / codex のみ。
+# opencode 等それ以外の AGENT_CMD は事前に1回手で実行して認証を確認しておくこと）。
+#   claude: ANTHROPIC_API_KEY（API 課金） / CLAUDE_CODE_OAUTH_TOKEN（Pro/Max の `claude setup-token`）
+#   codex : OPENAI_API_KEY、または `codex login` 済みの ~/.codex/auth.json
+case "$AGENT_CMD" in
+  claude*)
+    if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+      echo "ERROR: ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN のどちらも未設定です。無人の claude -p は認証できません。" >&2
+      exit 2
+    fi ;;
+  codex*)
+    if [[ -z "${OPENAI_API_KEY:-}" && ! -f "${CODEX_HOME:-$HOME/.codex}/auth.json" ]]; then
+      echo "ERROR: OPENAI_API_KEY が未設定で ${CODEX_HOME:-$HOME/.codex}/auth.json もありません。無人の codex exec は認証できません。" >&2
+      exit 2
+    fi ;;
+esac
 
 consecutive_fail=0
 consecutive_verify_fail=0

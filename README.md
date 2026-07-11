@@ -77,9 +77,9 @@ cd claude-plugins
 - Claude Code 固有の frontmatter（`disable-model-invocation` 等）は Codex / opencode では
   無視される。このため `commit-push` / `obsidian-handwritten-note` は Codex / opencode では
   自動発動もしうる（どちらも実行前にユーザー確認を挟む設計なので実害はない）
-- `single-agent-loop-setup` の Docker 隔離テンプレートは Claude Code CLI（`claude -p`）を
-  ループ内エージェントとして焼き込む前提。Codex / opencode でループ自体を回す場合の
-  `AGENT_CMD` 差し替え手順は同スキルの「ループを Claude 以外のエージェント CLI で回す」節を参照
+- `single-agent-loop-setup` のループ内エージェントは既定が Claude Code（`claude -p`）だが、
+  `AGENT_CMD`（＋Docker 隔離なら `LOOP_AGENT_PKG`）の指定だけで Codex / opencode でも回せる。
+  手順は同スキルの「ループを Claude 以外のエージェント CLI で回す」節を参照
 
 ## 収録内容
 

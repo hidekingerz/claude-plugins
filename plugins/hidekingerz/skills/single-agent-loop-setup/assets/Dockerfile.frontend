@@ -1,7 +1,7 @@
 # single-agent-loop 隔離実行イメージ（フロントエンド + MCP 実行時検証・Vite 系テンプレート）
 #
 # 通常の Dockerfile（node-slim）はブラウザを持たず、MCP での GUI 検証ができない。
-# これは Playwright ブラウザ入りのベースで、エージェント(claude -p)が VERIFY 段で
+# これは Playwright ブラウザ入りのベースで、ループ内エージェントが VERIFY 段で
 # Playwright MCP / chrome-devtools MCP を使い、実画面を開いてコンソールエラー等を観測できる。
 #
 # ★ブラウザはビルド時に焼き込む（docker build は egress 制限の外を通るため実行時 DL 不要）。
@@ -17,11 +17,14 @@ FROM mcr.microsoft.com/playwright:v1.55.0-noble
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Claude Code CLI と MCP サーバをイメージに焼き込む（実行時の npm 取得を避ける）
+# エージェント CLI と MCP サーバをイメージに焼き込む（実行時の npm 取得を避ける）。
+# エージェントの既定は Claude Code。Codex なら LOOP_AGENT_PKG=@openai/codex、opencode なら
+# LOOP_AGENT_PKG=opencode-ai（run-in-docker.sh / compose が環境変数をこの build-arg に渡す）。
 # ★サプライチェーン対策: 運用に乗せる際はバージョンを固定する（例: @anthropic-ai/claude-code@2.1.39）。
 #   未固定のままだとビルドのたびに最新を無検証で取り込む。
+ARG LOOP_AGENT_PKG=@anthropic-ai/claude-code
 RUN npm install -g \
-      @anthropic-ai/claude-code \
+      "$LOOP_AGENT_PKG" \
       @playwright/mcp \
       chrome-devtools-mcp
 

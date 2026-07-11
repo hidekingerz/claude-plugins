@@ -16,9 +16,16 @@
 #   export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...     # 認証その2: Pro/Max サブスク（`claude setup-token`）
 #   VERIFY_CMD="<品質ゲート>" ./loop/run-in-docker.sh # ↑どちらか一方があればよい
 #
+#   Claude 以外のエージェント CLI で回す場合（LOOP_AGENT_PKG がイメージに焼き込む npm パッケージ）:
+#     Codex:    LOOP_AGENT_PKG=@openai/codex OPENAI_API_KEY=sk-... \
+#               AGENT_CMD='codex exec --dangerously-bypass-approvals-and-sandbox -' ./loop/run-in-docker.sh
+#     opencode: LOOP_AGENT_PKG=opencode-ai + stdin ラッパー（SKILL.md 参照）+ 使うプロバイダの API キー
+#
 # 上書き可能な環境変数:
 #   LOOP_IMAGE          ビルドするイメージ名（既定: single-agent-loop:latest）
 #   LOOP_DOCKERFILE     使う Dockerfile（既定: Dockerfile。フロント+MCP 検証なら Dockerfile.frontend）
+#   LOOP_AGENT_PKG      イメージに焼き込むエージェント CLI の npm パッケージ
+#                       （既定: @anthropic-ai/claude-code。Dockerfile の build-arg に渡る）
 #   LOOP_NETWORK        docker network（既定: bridge）。API/レジストリに届く必要があるため完全遮断は
 #                       不可。宛先を絞るなら egress proxy 等を別途用意し、その network 名をここに指定。
 #   HOST_BACKEND        "1" で --add-host host.docker.internal:host-gateway を付与し、E2E 等で
@@ -37,13 +44,22 @@ REPO_ROOT="$PWD"
 
 IMAGE="${LOOP_IMAGE:-single-agent-loop:latest}"
 
-# 認証（無人ループのため対話ログインは使えない）。どちらか一方を渡す:
-#   ANTHROPIC_API_KEY        … API 課金（Console のキー）
-#   CLAUDE_CODE_OAUTH_TOKEN  … Pro/Max サブスク（`claude setup-token` で発行した長期トークン）
-if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-  echo "ERROR: ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN のどちらも未設定です（コンテナ内 claude -p の認証に必須）。" >&2
-  exit 1
-fi
+# 認証（無人ループのため対話ログインは使えない）。ループ内エージェントに応じて env で渡す:
+#   claude(既定): ANTHROPIC_API_KEY（API 課金）か CLAUDE_CODE_OAUTH_TOKEN（`claude setup-token`）
+#   codex       : OPENAI_API_KEY（コンテナ内ではホストの ~/.codex/auth.json を使えないため env 必須）
+#   opencode等  : 使うプロバイダの API キー（ANTHROPIC_API_KEY / OPENAI_API_KEY 等。ここでは判定しない）
+case "${AGENT_CMD:-claude}" in
+  claude*)
+    if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+      echo "ERROR: ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN のどちらも未設定です（コンテナ内 claude -p の認証に必須）。" >&2
+      exit 1
+    fi ;;
+  codex*)
+    if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+      echo "ERROR: OPENAI_API_KEY が未設定です（コンテナ内 codex exec の認証に必須）。" >&2
+      exit 1
+    fi ;;
+esac
 
 DOCKERFILE="${LOOP_DOCKERFILE:-Dockerfile}"
 if [[ ! -f "loop/$DOCKERFILE" ]]; then
@@ -89,8 +105,10 @@ integrity_snapshot() {
 pre_snapshot="$(integrity_snapshot)"
 # --------------------------------------------------------------------------------------------
 
-echo "== build image: $IMAGE (dockerfile: $DOCKERFILE) =="
-docker build -t "$IMAGE" -f "loop/$DOCKERFILE" loop/
+echo "== build image: $IMAGE (dockerfile: $DOCKERFILE, agent: ${LOOP_AGENT_PKG:-@anthropic-ai/claude-code}) =="
+build_args=()
+[[ -n "${LOOP_AGENT_PKG:-}" ]] && build_args=(--build-arg "LOOP_AGENT_PKG=$LOOP_AGENT_PKG")
+docker build -t "$IMAGE" -f "loop/$DOCKERFILE" ${build_args[@]+"${build_args[@]}"} loop/
 
 # 注: docker run は下で**背景実行 + wait**する（シグナル即応のため）。背景プロセスに `-t`
 # （pty 割当）を付けると、フォアグラウンドでない TTY 制御で端末が壊れる/出力が乱れることがあるため、
@@ -138,6 +156,7 @@ docker run --rm --name "$CONTAINER_NAME" \
   -w /workspace \
   -e ANTHROPIC_API_KEY \
   -e CLAUDE_CODE_OAUTH_TOKEN \
+  -e OPENAI_API_KEY \
   -e IS_SANDBOX=1 \
   -e VERIFY_CMD \
   -e MAX_ITER \

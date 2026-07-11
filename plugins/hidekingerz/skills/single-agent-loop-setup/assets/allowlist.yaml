@@ -13,8 +13,12 @@
 #   コンテナに余計な資格情報を渡さないことが前提（渡した資格情報の到達先 = exfil 経路になる）。
 
 allowlist:
-  # Anthropic API（claude -p に必須）
+  # Anthropic API（claude -p に必須。opencode で Anthropic モデルを使う場合も必要）
   - .anthropic.com
+  # OpenAI API（ループ内エージェントが Codex、または opencode で OpenAI モデルを使う場合に有効化）
+  # - .openai.com
+  # opencode は起動時にモデル一覧を models.dev から取得する（opencode で回す場合に有効化）
+  # - models.dev
   # npm レジストリ（VERIFY_CMD が npm/pnpm を使う場合。registry.npmjs.org を含む）
   - .npmjs.org
   # GitHub（依存取得・git 操作で必要になりがち。codeload 等サブドメインを含む）
