@@ -9,6 +9,19 @@
       "name": "hidekingerz",
       "source": "./plugins/hidekingerz",
       "description": "スキル・エージェント集: single-agent-loop-setup（自律コーディングループのセットアップ）/ graphify（ナレッジグラフ化）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント"
+    },
+    {
+      "name": "content-search",
+      "source": {
+        "source": "git-subdir",
+        "url": "hidekingerz/catch-all-favorite",
+        "path": "plugins/content-search"
+      },
+      "description": "catch-all-favorite の蓄積コンテンツ（catchup/security/research）を検索する MCP プラグイン。Docker（GHCR イメージ）で動作し、CATCH_ALL_FAVORITE_DIR 環境変数にローカル clone のパス設定が必要",
+      "version": "0.1.0",
+      "author": {
+        "name": "hidekingerz"
+      }
     }
   ]
 }
