@@ -14,7 +14,7 @@
       "name": "content-search",
       "source": {
         "source": "git-subdir",
-        "url": "hidekingerz/catch-all-favorite",
+        "url": "https://github.com/hidekingerz/catch-all-favorite.git",
         "path": "plugins/content-search"
       },
       "description": "catch-all-favorite の蓄積コンテンツ（catchup/security/research）を検索する MCP プラグイン。Docker（GHCR イメージ）で動作し、CATCH_ALL_FAVORITE_DIR 環境変数にローカル clone のパス設定が必要",
