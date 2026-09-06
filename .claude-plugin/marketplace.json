@@ -8,7 +8,7 @@
     {
       "name": "hidekingerz",
       "source": "./plugins/hidekingerz",
-      "description": "スキル・エージェント集: single-agent-loop-setup（自律コーディングループのセットアップ）/ graphify（ナレッジグラフ化）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント"
+      "description": "スキル・エージェント集: single-agent-loop-setup（自律コーディングループのセットアップ）/ graphify（ナレッジグラフ化）/ mado-show（herdr 上で markdown を mado の report ペインに表示）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント"
     },
     {
       "name": "content-search",
