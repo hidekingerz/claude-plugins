@@ -65,6 +65,14 @@ Claude Code のセッション内で:
 コミュニティ検出・正直な監査証跡つきで、インタラクティブ HTML / GraphRAG 用 JSON /
 平文の GRAPH_REPORT.md の3形式を出力。トリガー: `/graphify [path]`
 
+#### hidekingerz:mado-show
+
+[herdr](https://herdr.dev) 上で作業しているとき、markdown を agent の隣の
+mado report ペインに表示するスキル。plan / spec / report の `.md` を書き終えたら
+コミットの有無に関わらず自動で表示し、「mado で見せて」でも発動する。
+前提: herdr 0.8+ と [herdr-plugin-mado](https://github.com/hidekingerz/herdr-plugin-mado)
+の agent-report-viewer 0.2.0+（`herdr plugin action invoke mado.agent-report-viewer.install-cli` 実行済み）。
+
 #### hidekingerz:commit-push
 
 作業中の変更をコミットしてリモートへ push するスラッシュコマンド。

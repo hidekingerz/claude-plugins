@@ -1,6 +1,6 @@
 {
   "name": "hidekingerz",
-  "description": "hidekingerz のスキル・エージェント集: single-agent-loop-setup（自律コーディングループ）/ graphify（ナレッジグラフ化）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント",
+  "description": "hidekingerz のスキル・エージェント集: single-agent-loop-setup（自律コーディングループ）/ graphify（ナレッジグラフ化）/ mado-show（herdr 上で markdown を mado の report ペインに表示）/ commit-push / obsidian-handwritten-note ＋ tech-doc-writer / test-writer サブエージェント",
   "author": {
     "name": "hidekingerz"
   }
