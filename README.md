@@ -69,10 +69,12 @@ Claude Code のセッション内で:
 #### hidekingerz:mado-show
 
 [herdr](https://herdr.dev) 上で作業しているとき、markdown を agent の隣の
-mado report ペインに表示するスキル。plan / spec / report の `.md` を書き終えたら
-コミットの有無に関わらず自動で表示し、「mado で見せて」でも発動する。
+mado に表示するスキル。ランが触ったリポジトリ内の `.md` は agent-report-viewer が
+ラン終了時に自動で開くので、このスキルはそれ以外を受け持つ: 「mado で見せて」と
+頼まれたファイル、リポジトリの外や gitignore 配下に書いた plan / spec / report、
+ランの終了を待たずに読ませたいファイル。
 前提: herdr 0.8+ と [herdr-plugin-mado](https://github.com/hidekingerz/herdr-plugin-mado)
-の agent-report-viewer 0.2.0+（`herdr plugin action invoke mado.agent-report-viewer.install-cli` 実行済み）。
+の agent-report-viewer 0.3.0+（`herdr plugin action invoke mado.agent-report-viewer.install-cli` 実行済み）。
 
 #### hidekingerz:commit-push
 
