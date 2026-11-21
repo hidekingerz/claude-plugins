@@ -3,6 +3,7 @@
 claude 用スキル置き場（Claude Code plugin marketplace）。
 全スキル・エージェントを単一プラグイン `hidekingerz` に束ねている（vercel プラグインと同じ方式）。
 スキルは `hidekingerz:<スキル名>` の名前で利用できる。
+別のリポジトリで育てているものは、個別のプラグインとして載せている（[別リポジトリのプラグイン](#別リポジトリのプラグイン)）。
 
 ## 導入方法
 
@@ -89,3 +90,27 @@ mado report ペインに表示するスキル。plan / spec / report の `.md` �
   技術文書を作成する。「README が欲しい」「この API をドキュメント化して」で自動委任される
 - **test-writer** — 新規/既存コードのユニット・インテグレーションテストを作成する。
   「テストを書いて」「カバレッジを改善したい」で自動委任される
+
+## 別リポジトリのプラグイン
+
+本体を別のリポジトリで育てているものは、`hidekingerz` プラグインには束ねず、個別のプラグインとして載せている。
+ここにあるのは入口だけで、中身はそれぞれのリポジトリから取得される。
+
+### dokumi
+
+AI エージェントが書いたフロントエンドの変更を、PR を作る前に実行して検証するスキル（毒味）。
+型・lint・テスト・ビルドの実行、ごまかしの検出、要件との突き合わせ、ミューテーションテストによるテストの質の実測、
+実ブラウザでの動作確認を行い、PASS / FIX / ESCALATE の判定と、人向け・エージェント向けのレポートを出す。
+
+```
+/plugin install dokumi@hidekingerz
+```
+
+- スキル名は `dokumi:dokumi`。「PR 前に dokumi で検証して」で発動する。フロントエンドの実装を終えたときにも自動で呼ばれる
+- 本体: [hidekingerz/dokumi](https://github.com/hidekingerz/dokumi)（MIT）。
+  使い方は [docs/usage.md](https://github.com/hidekingerz/dokumi/blob/main/docs/usage.md)、
+  判定基準は [docs/criteria.md](https://github.com/hidekingerz/dokumi/blob/main/docs/criteria.md)
+- バージョンは固定していない。dokumi の `main` が進むと、`/plugin marketplace update hidekingerz` で新しい内容が入る
+- 必須: Node.js 18 以上と git。テストの質の実測は Node.js 24 以上と Vitest 5、実ブラウザ検証は Playwright が要る
+  （無い場合は、その段階が代替手順か「未実施」になる）
+- プロジェクトで自動有効化するときは、`enabledPlugins` に `"dokumi@hidekingerz": true` を足す

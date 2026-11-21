@@ -22,6 +22,24 @@
       "author": {
         "name": "hidekingerz"
       }
+    },
+    {
+      "name": "dokumi",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/hidekingerz/dokumi.git",
+        "path": ".claude/skills/dokumi"
+      },
+      "strict": false,
+      "skills": [
+        "./"
+      ],
+      "description": "AI エージェントが書いたフロントエンドの変更を、PR の前に実行して検証するスキル（毒味）。型・lint・テスト・ビルド、ごまかしの検出、要件との突き合わせ、ミューテーションテスト、実ブラウザでの確認を行い、PASS / FIX / ESCALATE の判定とレポートを出す。Node.js 18 以上と git が必要",
+      "author": {
+        "name": "hidekingerz"
+      },
+      "homepage": "https://github.com/hidekingerz/dokumi",
+      "license": "MIT"
     }
   ]
 }
